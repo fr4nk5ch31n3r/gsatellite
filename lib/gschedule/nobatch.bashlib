@@ -1,0 +1,156 @@
+#!/bin/bash
+#  gschedule/nobatch.bashlib - non batch scheduler for gsatellite
+
+:<<COPYRIGHT
+
+Copyright (C) 2012 Frank Scheiner
+
+The program is distributed under the terms of the GNU General Public License
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+COPYRIGHT
+
+readonly _thisScheduler="nobatch"
+
+:<<INCLUDE
+../gschedule.bashlib
+INCLUDE
+
+:<<FUNCTIONS
+gschedule/$_thisScheduler/schedule
+gschedule/$_thisScheduler/usageMsg
+gschedule/$_thisScheduler/helpMsg
+gschedule/$_thisScheduler/versionMsg
+FUNCTIONS
+
+. "$_LIB"/gschedule.bashlib
+
+################################################################################
+
+_gscheduleNobatchVersion="0.0.1"
+
+################################################################################
+
+gschedule/nobatch/isRunableJob() {
+        #  can we run the given job?
+        #
+        #  usage:
+        #+ gschedule/nobatch/isRunableJob job
+
+        #  this is the NON BATCH scheduler, hence all jobs can run at once.
+
+        #  check if job is valid?
+
+        return 0
+}
+
+gschedule/nobatch/schedule() {
+        #  schedule job
+        #
+        #  usage:
+        #+ gschedule/nobatch/schedule [job]
+
+        if [[ "$1" != "" ]]; then
+
+                local _job="$1"
+
+                #  get id for job
+                local _jobId=$( gschedule/getJobId "$_job" )
+
+                gschedule/prepareJob "$_job" "$_jobId"
+
+                #  scheduling decision
+                if gschedule/nobatch/isRunableJob "$_job"; then
+
+                        #  gschedule/startJob
+                        local _sputnikPid=$( gschedule/startJob "$_jobId" )
+
+                        if [[ "$?" == "0" ]]; then
+                                echo "$_sputnikPid" > "$_gscheduleBaseDir/running/$_jobId.d/sputnik.pid"
+                                echo "running" > "$_gscheduleBaseDir/running/$_jobId.d/state"
+
+                                echo "$_jobId"
+                                return 0
+                        else
+                                return 1
+                        fi
+                else
+                        gschedule/queueJob "$_job"
+                        return
+                fi
+
+        else
+                #  Do nothing. This is the nobatch scheduler, so jobs are started
+                #+ directly after submission. Hence no scheduling needed after
+                #+ a jobe is finished.
+                :
+                return
+        fi
+}
+
+################################################################################
+#  Functions below are not needed any longer!
+
+gschedule/nobatch/usageMsg() {
+
+    cat <<-USAGE
+
+    usage: gschedule [--help] ||
+           gschedule -f, --job jobFile
+
+    --help gives more information
+
+USAGE
+
+    return
+}
+
+
+gschedule/nobatch/helpMsg() {
+    
+    cat <<-HELP
+
+$( gschedule/nobatch/versionMsg )
+
+SYNOPSIS:
+
+gschedule [options]
+
+DESCRIPTION:
+
+gschedule is the job scheduler for gsatellite and is configured for NON BATCH
+scheduling. This means that jobs are started directly after submission and are
+not queued.
+
+OPTIONS:
+
+-f, --job jobFile       Set the job (file) that is to be scheduled.
+
+[--help]                Display this help and exit.
+
+[-V, --version]         Display version information and exit.
+
+HELP
+
+    return
+}
+
+gschedule/nobatch/versionMsg() {
+
+        echo "gschedule v$_gscheduleVersion (NOBATCH scheduler v$_gscheduleNobatchVersion)"
+
+        return
+}
+

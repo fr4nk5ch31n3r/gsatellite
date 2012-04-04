@@ -1,0 +1,102 @@
+#  ipc/file/sigfwd.bashlib - utility functions for signal forwarding
+
+:<<COPYRIGHT
+
+Copyright (C) 2012 Frank Scheiner
+
+The program is distributed under the terms of the GNU General Public License
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+COPYRIGHT
+
+:<<INCLUDE
+../file.bashlib
+../../utils.bashlib
+INCLUDE
+
+. "$_LIB"/ipc/file.bashlib
+. "$_LIB"/utils.bashlib
+
+:<<FUNCTIONS
+ipc/file/sigfwd/forwardSignal
+FUNCTIONS
+
+_ipc_file_sigfwdInboxName="sigfwd.inbox"
+
+ipc/file/sigfwd/forwardSignal() {
+    local _hostName="$1"
+    local _pid="$2"
+    local _signal="$3"
+
+    #  if target is on the same host, ...
+    if [[ "$_hostName" == $( utils/getHostName ) ]]; then
+        #  ...then use kill directly
+        kill -"$_signal" "$_pid"
+        return "$?"
+    fi
+
+    #  use a temporary inbox during signal forwarding
+    #local _answerBoxName="temp.inbox"
+    local _answerBox=$( ipc/file/createTempMsgBox )
+
+    if [[ "$?" != "0" ]]; then
+        echo "E: Temporary message box couldn't be created! Exiting." 1>&2
+        return 1
+    fi
+
+    while [[ 1 ]]; do
+        #  contact responsible signal forwarder on host with _hostName
+        [[ "$_DEBUG" == "1" ]] && echo "DEBUG: ($$) in forwardSignal() before sendMsg." 1>&2
+        ipc/file/sendMsg "$_MBOXES/$_hostName/$_ipc_file_sigfwdInboxName" "$_signal $_pid;$_answerBox"
+        #echo "ipc/file/sendMsg $_MBOXES/$_hostName/$_ipc_file_sigfwdInboxName $_signal $_pid;$_answerBox"
+        _retVal="$?"        
+        if [[ "$_retVal" == "0" ]]; then
+            [[ "$_DEBUG" == "1" ]] && echo "DEBUG: sendMsg() worked!" 1>&2
+            break
+        elif [[ "$_retVal" == "1" ]]; then
+            [[ "$_DEBUG" == "1" ]] && echo "DEBUG: sendMsg() returned 1!" 1>&2
+            sleep 1
+            continue
+        elif [[ "$_retVal" == "2" ]]; then
+            echo "E: Message box \"$_messageBox\" not existing." 1>&2
+            return 1
+        fi
+            [[ "$_DEBUG" == "1" ]] && echo "DEBUG: sendMsg() returned "$_retVal"!" 1>&2
+            exit
+    done
+
+    while [[ 1 ]]; do
+        [[ "$_DEBUG" == "1" ]] && echo "DEBUG: ($$) in forwardSignal() before receiveMsg." 1>&2
+        _answer=$( ipc/file/receiveMsg "$_answerBox" )
+        _retVal="$?"
+        if [[ "$_retVal" == "0" ]]; then
+            ipc/file/removeMsgBox "$_answerBox"
+            break
+        elif [[ "$_retVal" == "2" ]]; then
+            echo "E: Message box \"$_messageBox\" not existing." 1>&2
+            return 1
+        else
+            [[ "$_DEBUG" == "1" ]] && echo "DEBUG: receiveMsg() failed!" 1>&2
+            sleep 1
+            continue
+        fi
+    done
+
+    #  _answer is "return_value_of_kill;inbox_of_sigfwd"
+    local _killRetVal=$( echo "$_answer" | cut -d ';' -f 1 )
+
+    return "$_killRetVal"    
+}
+

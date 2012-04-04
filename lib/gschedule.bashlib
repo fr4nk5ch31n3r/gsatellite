@@ -1,0 +1,259 @@
+#!/bin/bash
+#  gschedule.bashlib - common gscheduler functions and variables
+
+:<<COPYRIGHT
+
+Copyright (C) 2012 Frank Scheiner
+
+The program is distributed under the terms of the GNU General Public License
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+COPYRIGHT
+
+:<<INCLUDE
+utils.bashlib
+INCLUDE
+
+:<<FUNCTIONS
+gschedule/anyRunningJob
+gschedule/prepareJob
+gschedule/queueJob
+gschedule/startJob
+gschedule/getJobId
+FUNCTIONS
+
+. "$_LIB"/utils.bashlib
+
+_gscheduleVersion="0.0.1"
+
+_gsatBaseDir=$HOME/.gsatellite
+_gscheduleBaseDir="$_gsatBaseDir/gschedule"
+_gscheduleJobDirs="jobs ready running finished failed"
+_gscheduleJobIdSource="$_gscheduleBaseDir/nextJobId"
+
+_gscheduleRunningDir="$_gscheduleBaseDir/running"
+_gscheduleFinishedDir="$_gscheduleBaseDir/finished"
+_gscheduleFailedDir="$_gscheduleBaseDir/failed"
+_gscheduleReadyDir="$_gscheduleBaseDir/ready"
+_gscheduleJobsDir="$_gscheduleBaseDir/jobs"
+
+#  Defined error numbers
+_err="1"
+_errCannotCreateBaseDir="20"
+_errCannotCreateJobDirs="21"
+
+#  prepare gschedule dir
+if [[ ! -e "$_gscheduleBaseDir" ]]; then
+    #  create base dir and job dirs
+    mkdir -p "$_gscheduleBaseDir" &>/dev/null || \
+    utils/exit "E: Cannot create \"$_gscheduleBaseDir\"! Exiting." "$_errCannotCreateBaseDir"
+    _oldPwd="$PWD"
+    cd "$_gscheduleBaseDir"
+    mkdir "$_gscheduleRunningDir" \
+	  "$_gscheduleFinishedDir" \
+	  "$_gscheduleFailedDir" \
+	  "$_gscheduleReadyDir" \
+	  "$_gscheduleJobsDir" &>/dev/null || \
+    utils/exit "E: Cannot create job directories! Exiting." "$_errCannotCreateJobDirs"
+
+    #  initialize job id source
+    echo "0" > "$_gscheduleJobIdSource"
+    cd "$_oldPwd"
+fi
+
+
+################################################################################
+
+#  NOTICE:
+#+ A job is defined as a file containing a/multiple command(s) to run by
+#+ gsatellite.
+#
+#  Example:
+#
+#  #!/bin/bash
+#+ #%gsatjob%
+#+ gtransfer -s gsiftp://host.domain1:2811/myfiles/* -d gsiftp://host.domain2:2811/myfiles/
+
+################################################################################
+
+gschedule/handleTerminatedJob() {
+        #  finalizing job
+        #
+        #  usage:
+        #+ gschedule/handleTerminatedJob jobId jobExitValue
+
+        local _jobId="$1"
+        local _jobExitValue="$2"
+
+        local _jobDir="$_gscheduleBaseDir/jobs/$_jobId.d"
+
+        #  lock both "running" and "finished" dir
+
+        #  "move" the job from the "running" dir to the "finished" or "failed" 
+        #+ dir, depending on the exit value.
+        rm "$_gscheduleBaseDir/running/$_jobId.d"
+
+        if [[ "$_jobExitValue" == "0" ]]; then
+                #  job finished successfully
+                ln -s "$_jobDir" "$_gscheduleBaseDir/finished/$_jobId.d"
+
+        else
+                #  job failed
+                ln -s "$_jobDir" "$_gscheduleBaseDir/failed/$_jobId.d"
+
+        fi
+
+        #  unlock both "running" and "finished" dir
+
+        return
+}
+
+gschedule/prepareJob() {
+        #  prepare job for running
+        #
+        #  usage:
+        #+ gschedule/prepareJob job jobId
+
+        local _job="$1"
+        local _jobId="$2"
+
+        #  first create an own dir for the job
+        local _jobDir="$_gscheduleBaseDir/jobs/$_jobId.d"
+        mkdir "$_jobDir"
+
+        #  place a host identifier there
+        echo "$( hostname --fqdn )" > "$_jobDir/host"
+        echo "$_jobId" > "$_jobDir/jobId"
+
+        #  place a copy of the job in the "jobs" dir in "jobtmp"
+        mkdir "$_jobDir/jobtmp"
+        cp "$_job" "$_jobDir/jobtmp"
+        ln -s "$_jobDir/jobtmp/$( basename $_job )" "$_jobDir/$_jobId"
+
+        return
+}
+
+gschedule/startJob() {
+        #  start job
+        #
+        #  usage:
+        #+ gschedule/runJob jobId
+
+        local _jobId="$1"
+
+        local _jobDir="$_gscheduleBaseDir/jobs/$_jobId.d"
+
+        #  lock both "ready" dir and "running" dir
+
+        #  "move" the job from the "ready" dir to the "running" dir
+        rm "$_gscheduleBaseDir/ready/$_jobId.d"
+
+        ln -s "$_jobDir" "$_gscheduleBaseDir/running/$_jobId.d"
+
+        #  unlock both "ready" dir and "running" dir
+
+        local _job=$( readlink "$_gscheduleBaseDir/running/$_jobId.d/$_jobId" )
+
+        #sputnik "$_job" &
+
+        #local _gsatellitePid="$!"
+
+        local _gsatellitePid="2"
+
+        echo "$_gsatellitePid"
+
+        return
+}
+
+gschedule/getJobId() {
+        #  get job id for job
+        #
+        #  usage:
+        #+ gschedule/getJobId job
+
+        local _job="$1"
+
+        #local _jobId=$( sha1sum < "$_job" | cut -d ' ' -f 1 )
+        local _jobId=$( cat "$_gscheduleJobIdSource" )
+
+        #  increment job id source
+        echo $(( $_jobId + 1 )) > "$_gscheduleJobIdSource"
+
+        local _jobIdPadded=$( printf %05d $_jobId )
+
+        echo "$_jobIdPadded"
+
+        return
+}
+
+gschedule/anyRunningJob() {
+        #  is there any job running
+        #
+        #  usage:
+        #+ gschedule/anyRunningJob
+
+        #  lock running dir
+
+        if [[ "$( ls -A "$_gscheduleRunningDir" )" != "" ]]; then
+                #  unlock running dir
+                return 0
+        else
+                #  unlock running dir
+                return 1
+        fi
+}
+
+gschedule/queueJob() {
+        #  queue the given job
+        #
+        #  usage:
+        #+ gschedule/queueJob job jobId
+
+        #  lock ready dir
+
+        local _job="$1"
+        local _jobId="$2"
+
+        local _jobDir="$_gscheduleBaseDir/jobs/$_jobId.d"
+
+        #  link the job from the "ready" dir
+        ln -s "$_jobDir" "$_gscheduleBaseDir/ready/$_jobId.d"
+
+        #  unlock ready dir
+
+        return
+}
+
+gschedule/getNextReadyJob() {
+        #  get the job id of the oldest job in the ready dir
+        #
+        #  usage:
+        #+ gschedule/getNextReadyJob
+
+        #  TODO:
+        #  Implementation
+        
+        local _readyDir="$_gscheduleBaseDir/ready"
+
+        local _nextReadyJobId=$( ls -1 "$_readyDir" | head -1 | cut -d '.' -f 1 )
+
+        if [[ "$_nextReadyJobId" != "" ]]; then
+                echo "$_nextReadyJobId"
+                return 0
+        else
+                return 1
+        fi
+}
+

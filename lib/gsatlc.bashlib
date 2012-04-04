@@ -1,0 +1,268 @@
+#  gsatlc.bashlib - library functions for gsatellite launch control
+
+:<<COPYRIGHT
+
+Copyright (C) 2012 Frank Scheiner
+
+The program is distributed under the terms of the GNU General Public License
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+COPYRIGHT
+
+:<<INCLUDE
+ipc.bashlib
+gschedule.bashlib
+INCLUDE
+
+:<<FUNCTIONS
+FUNCTIONS
+
+_scheduler="fifo"
+
+. "$_LIB"/ipc.bashlib
+. "$_LIB"/gschedule/$_scheduler.bashlib
+
+gsatlc/processMsg() {
+        #  process a received message
+        #
+        #  usage:
+        #+ processMsg message inbox
+
+        local _message="$1"
+        local _inbox="$2"
+
+        local _command=""
+        local _answerBox=""
+
+        _command=$( echo "$_message" | cut -d ';' -f 1 )
+        _answerBox=$( echo "$_message" | cut -d ';' -f 2 )
+
+        #  event: qsub
+        if [[ "$_command" =~ ^QSUB.* ]]; then
+                local _job=${_command##QSUB }
+
+                local _jobId=$( gsatlc/qsub "$_job" )
+
+                if [[ "$?" == "0" ]]; then
+                        ipc/file/sendMsg "$_answerBox" "$_jobId;$_inbox"
+                else
+                        ipc/file/sendMsg "$_answerBox" "qsub failed;$_inbox"
+                fi
+
+                #echo "I: $_job submitted!"
+                return
+
+        #  event: job terminated
+        elif [[ "$_command" =~ ^TERMINATED.* ]]; then
+                #  _command is "TERMINATED <EXIT_VALUE> <JOB_ID>"
+                local _jobId=$( echo "$_command" | cut -d ' ' -f 3 )
+                local _jobExitValue=$( echo "$_command" | cut -d ' ' -f 2 )
+
+                gschedule/handleTerminatedJob "$_jobId" "$_jobExitValue"
+
+                if [[ "$?" == "0" ]]; then
+                        #  schedule/start next ready job
+                        gsatlc/schedule
+                        return
+                else
+                        return 1
+                fi
+
+        #  unknown event or command
+        else
+                return 2
+
+        fi
+}
+
+gsatlc/qsub() {
+        #  submit a job to gsatellite
+        #
+        #  usage:
+        #+ gsatlc/qsub job
+
+        local _job="$1"
+
+        local _jobId=$( gschedule/$_scheduler/schedule "$_job" )
+
+        if [[ "$?" == "0" ]]; then
+                echo "$_jobId"
+                return 0
+        else
+                return 1
+        fi
+}
+
+gsatlc/schedule() {
+        #  call scheduler to start the next ready job
+        #
+        #  usage:
+        #+ gsatlc/schedule
+
+        gschedule/$_scheduler/schedule
+
+        if [[ "$?" == "0" ]]; then
+                return 0
+        else
+                return 1
+        fi
+}
+
+################################################################################
+#  OLD CODE
+#  Don't use without checking first.
+
+#  NOTICE:
+#+ All list commands should use a cached list by default and only actively
+#+ request an up to date list if needed. The cached list should be updated
+#+ every X seconds.
+
+#  Alternative:
+#+ gsatlc could lock the gschedule dir (and the job dirs) when listing
+#+ jobs.
+
+gsatlc/gqstat() {
+    #  list gsatellite jobs
+    #
+    #  usage:
+    #+ gsatlc/gqstat [jobState]
+
+    _jobState="$1"
+
+    if [[ "$_jobState" == "" ]]; then
+        gsatlc/listAllJobs
+    elif [[ "$_jobState" == "ready" || \
+            "$_jobState" == "running" || \
+            "$_jobState" == "finished" || \
+            "$_jobState" == "failed" ]]; then
+        gsatlc/listJobsInState "$_jobState"
+    else
+        return 1
+    fi
+
+    return
+}
+
+
+gsatlc/gqdel() {
+    #  remove a job from gsatellite
+    #
+    #  usage:
+    #+ gsatlc/gqdel jobId
+
+    local _jobId="$1"
+
+    
+    if ! gsatlc/isValidJobId "$_jobId"; then
+        echo "E: \"$_jobId\" is not a valid job id! Exiting."
+        return 1
+    elif gsatlc/isRunningJob "$_jobId"; then
+        echo "E: Cannot delete running job! Exiting."
+        return 2
+    else
+        local _jobDir=$( gsatlc/getJobDirForJobId "$_jobId" )
+
+        ipc/lock "$_jobDir"
+
+        gsatlc/removeJobWithJobId "$_jobId"
+        local _returnVal="$?"
+
+        ipc/unlock "$_jobDir"
+    fi
+
+    return
+}
+
+gsatlc/getJobDirForJobId() {
+    #  get the job dir for a job id
+    #
+    #  usage:
+    #+ gsatlc/getJobDirForJobId jobId
+
+    local _jobId="$1"
+
+    local _jobDir=$( readlink "$_gscheduleBaseDir/jobs/$_jobId.d" )
+
+    local _returnVal="$?"
+
+    echo "$_jobDir"
+
+    return "$_returnVal"
+}
+
+gsatlc/removeJobWithJobId() {
+    #  remove a job identified by its id
+    #
+    #  usage:
+    #+ gsatlc/removeJobWithJobId jobId
+
+    local _jobId="$1"
+
+    local _jobDir=$( gsatlc/getJobDirForJobId "$_jobId" )
+
+    #  remove link and job dir
+    rm -f "$_gscheduleBaseDir/jobs/$_jobId.d" &>/dev/null && \
+    rm -rf "$_jobDir" &>/dev/null
+
+    return "$?"
+}
+
+gsatlc/isValidJobId() {
+    #  check if the given job id is valid
+    #
+    #  usage:
+    #+ gsatlc/isValidJobId jobId
+
+    local _jobId="$1"
+
+    if grep -w "$_jobId" <( ls -1 "$_gscheduleBaseDir/jobs/" ) &>/dev/null; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+gsatlc/isRunningJob() {
+    #  check if the job with the given job id is in running state
+    #
+    #  usage:
+    #+ gsatlc/isRunningJob jobId
+
+    local _jobId="$1"
+
+    #  perhaps a single file called "state" in the job dir could contain the
+    #+ current state and hence save some calls to external tools.
+    local _jobState=$( basename $( dirname $( readlink "$_gscheduleBaseDir/jobs/${_jobId}.d" ) ) )
+
+    if [[ "$_jobState" == "running" ]]; then
+        return 0
+    else
+        return 1
+    fi
+}
+
+gsatlc/gqwait() {
+    #  wait for the job specified by its id to exit and return exit value
+    #
+    #  usage:
+    #+ gsatlc/gqwait jobId
+
+    local _jobId="$1"
+
+    # block until job is finished
+
+    return "$_jobExitValue"
+}
+
