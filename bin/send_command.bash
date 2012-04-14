@@ -44,7 +44,7 @@ processMsg() {
     _answer=$( echo "$_message" | cut -d ';' -f 1 )
     _answerBox=$( echo "$_message" | cut -d ';' -f 2 )
 
-    echo "I: answer \"$_answer\" from box \"$_answerBox\"."
+    echo "($$) I: answer \"$_answer\" from box \"$_answerBox\"."
     
     return
 }
@@ -56,7 +56,7 @@ trap 'ipc/file/removeLocalMsgBoxByName "$_inboxName"' EXIT
 
 if [[ "$1" == "" ]]; then
         echo ""
-        echo "usage: send_command command targetMessageBox"
+        echo "usage: send_command command targetMessageBox [--no-sigfwd]"
         echo ""
         echo "with command in:"
         echo "* \"ALIVE?\""
@@ -68,6 +68,7 @@ if [[ "$1" == "" ]]; then
         exit 1
 fi
 
+_noSignalForwarding=0
 
 _self="$$"
 
@@ -78,6 +79,10 @@ _inbox=$( ipc/file/createMsgBox "$_inboxName" )
 
 _command="$1"
 _messageBox="$2"
+
+if [[ "$3" == "--no-sigfwd" ]]; then
+        _noSignalForwarding=1
+fi
 
 _contactHostName="$( ipc/file/getHostNameForMsgBox $_messageBox )"
 _contactPid="$( ipc/file/getPidForMsgBox $_messageBox )"
@@ -95,18 +100,21 @@ while [[ 1 ]]; do
     _retVal="$?"
     if [[ "$_retVal" == "0" ]]; then
         [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: sendMsg($_command;$_inbox) successful."
-        #  send SIGCONT to stop&go process (sputnik)
-        [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: before forwardSignal()." 1>&2
-        ipc/file/sigfwd/forwardSignal "$_contactHostName" "$_contactPid" "SIGCONT"
-        if [[ "$?" != "0" ]]; then
-            #  signal couldn't be delivered, perhaps contact is dead
-            echo "E: Signal forwarding to contact \"$_contactPid\" on host \"$_contactHostName\" failed. Exiting." 1>&2
-            exit 1
+        touch -mc "$_messageBox"
+        if [[ $_noSignalForwarding -eq 0 ]]; then
+                #  send SIGCONT to stop&go process (sputnik)
+                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: before forwardSignal()." 1>&2
+                ipc/file/sigfwd/forwardSignal "$_contactHostName" "$_contactPid" "SIGCONT"
+                if [[ "$?" != "0" ]]; then
+                    #  signal couldn't be delivered, perhaps contact is dead
+                    echo "E: Signal forwarding to contact \"$_contactPid\" on host \"$_contactHostName\" failed. Exiting." 1>&2
+                    exit 1
+                fi
         fi
         break
     elif [[ "$_retVal" == "1" ]]; then
         [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: sendMsg($_message;$_inbox) failed."
-        sleep 1
+        sleep 0.5
         continue
     elif [[ "$_retVal" == "2" ]]; then
         echo "E: Message box \"$_messageBox\" not existing." 1>&2
@@ -115,15 +123,20 @@ while [[ 1 ]]; do
 done
 
 while [[ 1 ]]; do
-    _answer=$( ipc/file/receiveMsg "$_inbox" )
-    _retVal="$?"
-    if [[ "$_retVal" == "0" ]]; then
-        [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: receiveMsg($_inbox) successful."
-        break
-    else
-        [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: receiveMsg($_inbox) failed."
-        sleep 1
-    fi
+        #  touch it first, so changes on other hosts are propagated
+        if ipc/file/messageAvailable "$_inbox"; then
+                _answer=$( ipc/file/receiveMsg "$_inbox" )
+                _retVal="$?"
+                if [[ "$_retVal" == "0" ]]; then
+                        [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: receiveMsg($_inbox) successful."
+                        break
+                else
+                        [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: receiveMsg($_inbox) failed."
+                        sleep 0.5
+                fi
+        else
+                sleep 0.5
+        fi
 done
 
 processMsg "$_answer"
