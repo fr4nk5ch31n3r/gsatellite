@@ -44,21 +44,29 @@ ipc/file/msgproc/processMsg() {
         _command=$( echo "$_message" | cut -d ';' -f 1 )
         _answerBox=$( echo "$_message" | cut -d ';' -f 2 )
 
-        #echo "($$) in ipc/file/msgproc/processMsgStdFunc(): _message=\"$_message\" _command=\"$_command\""
+        [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in ipc/file/msgproc/processMsg() _message=\"$_message\" _inbox=\"$_inbox\"" 1>&2
 
         #  standard message processing functionality
         if [[ "$_command" == "ALIVE?" ]]; then
                 ipc/file/sendMsg "$_answerBox" "YES;$_inbox"
-                return
+                local _retVal="$?"
+                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in ipc/file/msgproc/processMsg() after sendMsg(\"$_answerBox\",\"YES;$_inbox\") which returned \"$_retVal\"" 1>&2
+                return "$_retVal"
         elif [[ "$_command" == "STOP" ]]; then
                 ipc/file/sendMsg "$_answerBox" "STOPPING;$_inbox"
-                exit
+                local _retVal="$?"
+                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in ipc/file/msgproc/processMsg() after sendMsg(\"$_answerBox\",\"STOPPING;$_inbox\") which returned \"$_retVal\"" 1>&2
+                exit "$_retVal"
         elif [[ "$_command" == "PID?" ]]; then
                 ipc/file/sendMsg "$_answerBox" "$$;$_inbox"
-                return
+                local _retVal="$?"
+                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in ipc/file/msgproc/processMsg() after sendMsg(\"$_answerBox\",\"$$;$_inbox\") which returned \"$_retVal\"" 1>&2
+                return "$_retVal"
         elif [[ "$_command" == "HOST?" ]]; then
                 ipc/file/sendMsg "$_answerBox" "$( hostname --fqdn );$_inbox"
-                return
+                local _retVal="$?"
+                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in ipc/file/msgproc/processMsg() after sendMsg(\"$_answerBox\",\"$( hostname --fqdn );$_inbox\") which returned \"$_retVal\"" 1>&2
+                return "$_retVal"
         #  to expand add new commands and handling here
         #elif [[ "$_command" == "<NEW_COMMAND>" ]]; then
         #        <DO_SOMETHING>
@@ -67,7 +75,9 @@ ipc/file/msgproc/processMsg() {
         #  the last command should always be the "UNKNOWN COMMAND".
         else
                 ipc/file/sendMsg "$_answerBox" "UNKNOWN COMMAND;$_inbox"
-                return
+                local _retVal="$?"
+                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in ipc/file/msgproc/processMsg() after sendMsg(\"$_answerBox\",\"UNKNOWN COMMAND;$_inbox\") which returned \"$_retVal\"" 1>&2
+                return 1
         fi
 
 }
