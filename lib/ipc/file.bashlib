@@ -1,4 +1,5 @@
-#  ipc/file.bashlib - utility functions for IPC communication with files
+#  ipc/file.bashlib - utility functions for IPC communication with dirs and
+#+ files
 
 :<<COPYRIGHT
 
@@ -40,69 +41,86 @@ ipc/file/isAliasMsgBox
 FUNCTIONS
 
 #  TODO:
-#  Only source a "parent" lib if it's not already loaded, by a sister/brother
+#  Only source a "parent" lib if it's not already loaded by a sister/brother
 #+ lib.
 . "$_LIB"/ipc.bashlib
 
 ipc/file/getHostNameForMsgBox() {
-    local _messageBox="$1"
+        #  get the FQDN for the specified message box
+        #
+        #  usage:
+        #+ ipc/file/getHostNameForMsgBox messageBox
 
-    if ipc/file/isAliasMsgBox "$_messageBox"; then
-        #  get corresponding message box for alias message box
-        #  NOTICE:
-        #+ Alias message boxes mustn't use directories, but only the name of
-        #+ the corresponding message box.
-        _messageBox="$( dirname $_messageBox )/$( readlink $_messageBox )"
-    fi
+        local _messageBox="$1"
 
-    local _hostName=""
+        if ipc/file/isAliasMsgBox "$_messageBox"; then
+                #  get corresponding message box for alias message box
+                #  NOTICE:
+                #+ Alias message boxes mustn't use directories, but only the name of
+                #+ the corresponding message box.
+                _messageBox="$( dirname $_messageBox )/$( readlink $_messageBox )"
+        fi
 
-    local _tmp=$( dirname "$_messageBox" )
+        local _hostName=""
 
-    local _tmpRetVal1="$?"
+        local _tmp=$( dirname "$_messageBox" )
 
-    _hostName=$( basename "$_tmp" )
+        local _tmpRetVal1="$?"
 
-    local _tmpRetVal2="$?"
+        _hostName=$( basename "$_tmp" )
 
-    echo "$_hostName"
+        local _tmpRetVal2="$?"
 
-    return $(( $_tmpRetVal1 && $_tmpRetVal2 ))
+        echo "$_hostName"
+
+        return $(( $_tmpRetVal1 && $_tmpRetVal2 ))
 }
 
 ipc/file/getPidForMsgBox() {
-    local _messageBox="$1"
+        #  get the PID for the specified message box
+        #
+        #  usage:
+        #+ ipc/file/getPidForMsgBox messageBox
 
-    if ipc/file/isAliasMsgBox "$_messageBox"; then
-        #  get corresponding message box for alias message box
-        #  NOTICE:
-        #+ Alias message boxes mustn't use directories, but only the name of
-        #+ the corresponding message box.
-        _messageBox="$( dirname $_messageBox )/$( readlink $_messageBox )"
-    fi
+        local _messageBox="$1"
 
-    local _pid=$( basename "$_messageBox" | cut -d '.' -f 1 )
-    if [[ "$?" == "0" ]]; then
-        echo "$_pid"
-        return 0
-    else
-        return 1
-    fi
+        if ipc/file/isAliasMsgBox "$_messageBox"; then
+                #  get corresponding message box for alias message box
+                #  NOTICE:
+                #+ Alias message boxes mustn't use directories, but only the name of
+                #+ the corresponding message box.
+                _messageBox="$( dirname $_messageBox )/$( readlink $_messageBox )"
+        fi
+
+        #  the name of a message box is constructed as follows:
+        #+ "<PID>.inbox"
+        local _pid=$( basename "$_messageBox" | cut -d '.' -f 1 )
+                if [[ "$?" == "0" ]]; then
+                echo "$_pid"
+                return 0
+        else
+                return 1
+        fi
 }
 
 ipc/file/getLocalMsgBoxByName() {
-    local _messageBoxName="$1"
+        #  get a local message box by its name
+        #
+        #  usage:
+        #+ ipc/file/getLocalMsgBoxByName messageBoxName
 
-    local _hostName=$( hostname --fqdn )
+        local _messageBoxName="$1"
 
-    local _messageBoxPath="$_MBOXES/$_hostName"
-    
-    if [[ ! -e "$_messageBoxPath/$_messageBoxName" ]]; then
-        return 1
-    else
-        echo "$_messageBoxPath/$_messageBoxName"
-        return 0
-    fi
+        local _hostName=$( hostname --fqdn )
+
+        local _messageBoxPath="$_MBOXES/$_hostName"
+
+        if [[ ! -e "$_messageBoxPath/$_messageBoxName" ]]; then
+                return 1
+        else
+                echo "$_messageBoxPath/$_messageBoxName"
+                return 0
+        fi
 }
 
 #ipc/file/createAliasForMsgBox() {
@@ -120,150 +138,201 @@ ipc/file/getLocalMsgBoxByName() {
 #}
 
 ipc/file/createAliasMsgBox() {
-    local _messageBox="$1"
-    local _aliasMessageBoxName="$2"
+        #  create an alias message box (to allow addressing of specific message
+        #+ boxes with "well known" message box names, e.g. "sigfwd.inbox" for
+        #+ the message box of the signal forwarding process)
+        #
+        #  usage:
+        #+ ipc/file/createAliasMsgBox messageBox aliasMessageBoxName
 
-    local _aliasMessageBox="$( dirname $_messageBox )/$_aliasMessageBoxName"
+        local _messageBox="$1"
+        local _aliasMessageBoxName="$2"
 
-    #  create alias message box
-    ln -s "$( basename $_messageBox )" "$_aliasMessageBox"
+        local _aliasMessageBox="$( dirname $_messageBox )/$_aliasMessageBoxName"
 
-    local _retVal="$?"
+        #  create alias message box
+        ln -s "$( basename $_messageBox )" "$_aliasMessageBox"
 
-    echo "$_aliasMessageBox"
+        local _retVal="$?"
 
-    return "$_retVal"
+        echo "$_aliasMessageBox"
+
+        return "$_retVal"
 }
 
 ipc/file/createTempMsgBox() {
-    local _hostName=$( hostname --fqdn )
+        #  create temporary message box. Temporary message boxes don't have a
+        #+ PID associated to it.
+        #
+        #  usage:
+        #+ ipc/file/createTempMsgBox
 
-    local _messageBoxPath="$_MBOXES/$_hostName"
+        local _hostName=$( hostname --fqdn )
 
-    if [[ ! -e "$_messageBoxPath" ]]; then
-        mkdir -p "$_messageBoxPath" &>/dev/null
-        while ! ls "$_messageBoxPath" &>/dev/null; do
-            sleep 0.1
-        done
-    fi
+        local _messageBoxPath="$_MBOXES/$_hostName"
 
-    #  create temporary message box
-    local _tempMessageBox=$( /bin/mktemp -p "$_messageBoxPath" XXXXXXXX 2>/dev/null )
+        if [[ ! -e "$_messageBoxPath" ]]; then
+                mkdir -p "$_messageBoxPath" &>/dev/null
+                while ! ls "$_messageBoxPath" &>/dev/null; do
+                        sleep 0.1
+                done
+        fi
 
-    _retVal="$?"
+        #  create temporary message box
+        local _tempMessageBox=$( /bin/mktemp --directory -p "$_messageBoxPath" XXXXXXXX 2>/dev/null )
 
-    mv "$_tempMessageBox" "$_tempMessageBox.inbox"
+        _retVal="$?"
 
-    echo "$_tempMessageBox.inbox"
+        mv "$_tempMessageBox" "$_tempMessageBox.inbox"
 
-    return "$_retVal"
-    
+        echo "$_tempMessageBox.inbox"
+
+        return "$_retVal"    
 }
 
 ipc/file/createMsgBox() {
-    local _messageBoxName="$1"
+        #  create a message box
+        #
+        #  usage:
+        #+ ipc/file/createMsgBox messageBoxName
 
-    local _hostName=$( hostname --fqdn )
+        #  TODO:
+        #  Change interface of function to use a PID as parameter.
 
-    local _messageBoxPath="$_MBOXES/$_hostName"
-    
-    if [[ ! -e "$_messageBoxPath" ]]; then
-        mkdir -p "$_messageBoxPath" &>/dev/null
-        while ! ls "$_messageBoxPath" &>/dev/null; do
-            sleep 0.1
-        done
-    fi
+        local _messageBoxName="$1"
 
-    #  create or truncate message box
-    > "$_messageBoxPath"/$_messageBoxName &>/dev/null
-    
-    _retVal="$?"
+        local _hostName=$( hostname --fqdn )
 
-    echo "$_messageBoxPath/$_messageBoxName"
+        local _messageBoxPath="$_MBOXES/$_hostName"
 
-    return "$_retVal"
+        if [[ ! -e "$_messageBoxPath" ]]; then
+                mkdir -p "$_messageBoxPath" &>/dev/null
+                while ! ls "$_messageBoxPath" &>/dev/null; do
+                        sleep 0.1
+                done
+        fi
+
+        #  create message box
+        mkdir "$_messageBoxPath"/$_messageBoxName &>/dev/null
+
+        _retVal="$?"
+
+        echo "$_messageBoxPath/$_messageBoxName"
+
+        return "$_retVal"
 }
 
 ipc/file/removeLocalMsgBoxByName() {
-    local _messageBoxName="$1"
+        #  remove the local message box with the specified name
+        #
+        #  usage:
+        #+ ipc/file/removeLocalMsgBoxByName messageBoxName
+        local _messageBoxName="$1"
 
-    #  remove message box
-    ipc/file/removeMsgBox "$( ipc/file/getLocalMsgBoxByName $_messageBoxName )"
+        #  remove message box
+        ipc/file/removeMsgBox "$( ipc/file/getLocalMsgBoxByName $_messageBoxName )"
 
-    _retVal="$?"
+        _retVal="$?"
 
-    return "$_retVal"
+        return "$_retVal"
 }
 
 ipc/file/removeMsgBox() {
-    local _messageBox="$1"
+        #  remove the specified message box
+        #
+        #  usage:
+        #+ ipc/file/removeMsgBox messageBox
 
-    #  remove message box
-    rm -f "$_messageBox" &>/dev/null
+        local _messageBox="$1"
 
-    _retVal="$?"
+        #  remove message box
+        rm -rf "$_messageBox" &>/dev/null
 
-    return "$_retVal"
+        _retVal="$?"
+
+        return "$_retVal"
 }
 
 ipc/file/isAliasMsgBox() {
-    local _messageBox="$1"
+        #  is the specified message box an alias for another message box?
+        #
+        #  usage:
+        #+ ipc/file/isAliasMsgBox
 
-    if [[ -h "$_messageBox" ]]; then
-        return 0
-    else
-        return 1
-    fi
+        local _messageBox="$1"
+
+        if [[ -h "$_messageBox" ]]; then
+                return 0
+        else
+                return 1
+        fi
 }
 
 ipc/file/sendMsg() {
-    #  send message to the message box of a process
-    #
-    #  usage:
-    #+ ipc/file/sendMsg messageBox message
-    #+
-    #+ message format: 'command;answerBox'
-    #+ command depends on the functionality the destination process supports.
-    #+ Default message processing is provided by ipc/file/msgproc.bashlib.
-    local _messageBox="$1"
-    local _message="$2"
+        #  send message to the message box of a process
+        #
+        #  usage:
+        #+ ipc/file/sendMsg messageBox message
+        #+
+        #+ message format: 'command;answerBox'
+        #+ command depends on the functionality the destination process supports.
+        #+ Default message processing is provided by ipc/file/msgproc.bashlib.
+        local _messageBox="$1"
+        local _message="$2"
 
-    local _sendRetVal=0
+        local _sendRetVal=0
 
-        ls "$_messageBox" &>/dev/null
-
-        if [[ ! -e "$_messageBox" ]]; then
-                return 2
+        if ipc/file/isAliasMsgBox "$_messageBox"; then
+                #  get corresponding message box for alias message box
+                #  NOTICE:
+                #+ Alias message boxes mustn't use directories, but only the name of
+                #+ the corresponding message box.
+                _messageBox="$( dirname $_messageBox )/$( readlink $_messageBox )"
+                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in sendMsg() _messageBox=\"$_messageBox\"" 1>&2
         fi
 
-    if ipc/file/isAliasMsgBox "$_messageBox"; then
-        #  get corresponding message box for alias message box
-        #  NOTICE:
-        #+ Alias message boxes mustn't use directories, but only the name of
-        #+ the corresponding message box.
-        _messageBox="$( dirname $_messageBox )/$( readlink $_messageBox )"
-        [[ "$_DEBUG" == "1" ]] && echo "DEBUG: ($$) in receiveMsg() _messageBox=\"$_messageBox\"" 1>&2
-    fi
+        local _counter=0
 
-    while [[ 1 ]]; do
-        [[ "$_DEBUG" == "1" ]] && echo "DEBUG: ($$) in sendMsg() before lock()." 1>&2
-        #  Try to lock message box
-        if ipc/lock "$_messageBox"; then
-            [[ "$_DEBUG" == "1" ]] && echo "DEBUG: ($$) in sendMsg() locked \"$_messageBox\"." 1>&2
-            echo -en "$_message\n" >> "$_messageBox" 2>/dev/null
-            _sendRetVal="$?"
-            [[ "$_DEBUG" == "1" ]] && echo "DEBUG: ($$) in sendMsg() _sendRetVal=\"$_sendRetVal\"." 1>&2
-            #  unlock message box
-            ipc/unlock "$_messageBox"
-            [[ "$_DEBUG" == "1" ]] && echo "DEBUG: ($$) in sendMsg() before break." 1>&2
-            #exit 1
-            break
-        else
-            sleep 0.1
-        fi
-    done
+        #  message box not existing?
+        while [[ ! -e "$_messageBox" ]]; do
+                #  looks like, but check three times at max before giving up
+                touch -mc "$_messageBox" &>/dev/null
 
-    return "$_sendRetVal"
+                if [[ $_counter -eq 3 ]]; then
+                        return 2
+                fi
+
+                _counter=$(( $_counter + 1 ))
+        done
+
+        while [[ 1 ]]; do
+                #  mktemp returns the name of the message file preceded by the
+                #+ message box (dir). If this has a relative path, the returned
+                #+ path is also relative!
+                #  Create file for message, but hide it as long as the message
+                #+ was not copied to the file.
+                local _messageFileWithPath=$( mktemp -p "$_messageBox" .message.XXXXXXXX )
+                if [[ "$?" != "0" ]]; then
+                        sleep 0.1
+                        continue
+                fi
+                local _messageFileName=$( basename "$_messageFileWithPath" )
+                #  TODO:
+                #+ The mv sometimes seems not to work (e.g. in a test case where
+                #+ 60 senders sent 60 messages simultaneously (inter-node comm
+                #+ over NFS)and the receiver answered asynchronously to all 60
+                #+ senders (now receivers)).
+                #+ A receiver that waits on a new message will then block, even
+                #+ if a new message arrived.
+                #+ But as it was not yet renamed, the receiver cannot detect
+                #+ this.
+                echo "$_message" > "$_messageFileWithPath" && \
+                mv "$_messageFileWithPath" "$_messageBox"/${_messageFileName##.}
+                local _sendRetVal="$?"
+                break
+        done
+
+        return "$_sendRetVal"
 
 }
 
@@ -277,53 +346,80 @@ ipc/file/receiveMsg() {
 
         local _receiveRetVal=0
 
-        ls "$_messageBox" &>/dev/null
-
-        if [[ ! -e "$_messageBox" ]]; then
-                return 2
-        elif [[ ! -s "$_messageBox" ]]; then
-                return 1
-        fi
-
         if ipc/file/isAliasMsgBox "$_messageBox"; then
                 #  get corresponding message box for alias message box
                 #  NOTICE:
                 #+ Alias message boxes mustn't use directories, but only the name of
                 #+ the corresponding message box.
                 _messageBox="$( dirname $_messageBox )/$( readlink $_messageBox )"
-                [[ "$_DEBUG" == "1" ]] && echo "DEBUG: ($$) in receiveMsg() _messageBox=\"$_messageBox\"" 1>&2
+                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in receiveMsg() _messageBox=\"$_messageBox\" has alias" 1>&2
+        fi
+
+        touch -c "$_messageBox" &>/dev/null
+
+        if [[ ! -e "$_messageBox" ]]; then
+                return 2
         fi
 
         while [[ 1 ]]; do
-                [[ "$_DEBUG" == "1" ]] && echo "DEBUG: ($$) in receiveMsg() before lock()." 1>&2
-                if ipc/lock "$_messageBox"; then
-                        [[ "$_DEBUG" == "1" ]] && echo "DEBUG: ($$) in receiveMsg() locked \"$_messageBox\"." 1>&2
-                        exec 3<"$_messageBox"
-                        read -u 3 _message &>/dev/null
-                        _receiveRetVal="$?"
-                        exec 3<&-
-
-                        #  remove current message
-                        mv "$_messageBox" "$_messageBox".tmp
-                        tail -n +2 "$_messageBox".tmp >"$_messageBox"
-                        rm "$_messageBox".tmp
-
-                        ipc/unlock "$_messageBox"
-                        [[ "$_DEBUG" == "1" ]] && echo "DEBUG: ($$) in receiveMsg() before break." 1>&2
-                        break 1
+                #                         +- list one file per line
+                #                         |  +- sort by "ctime (time of last modification of file status information)" (from ls(1))
+                #                         |  |  +- reverse listing 
+                #                         |  |  |
+                #                         |  |  |                                             +- pick the "oldest" file
+                #                         |  |  |                                             |
+                local _nextMessage=$( ls -1 -c -r "$_messageBox"/message* 2>/dev/null | head -1 )
+                if [[ "$?" != "0" ]]; then
+                        sleep 0.1
+                        continue
                 fi
-                sleep 0.1 
+                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in receiveMsg() _nextMessage=\"$_nextMessage\"." 1>&2
+                if [[ "$_nextMessage" != "" ]]; then
+                        #touch -a --no-create "$_nextMessage" 2>/dev/null
+                        _message=$( cat "$_nextMessage" )
+                        _nextMessageName=$( basename "$_nextMessage" )
+                        mv "$_nextMessage" "$_messageBox"/read."$_nextMessageName" &>/dev/null && rm "$_messageBox"/read."$_nextMessageName" &>/dev/null
+                        #while stat "$_nextMessage" &>/dev/null; do
+                        #        rm -f "$_nextMessage" &>/dev/null
+                        #        echo "hanging" 1>&2
+                        #        sleep 0.1
+                        #done
+                        break
+                fi
         done
 
 
         if [[ "$_message" != "" ]]; then
                 echo "$_message"
-                [[ "$_DEBUG" == "1" ]] && echo "DEBUG: ($$) in receiveMsg(): _message=\"$_message\"" 1>&2
+                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in receiveMsg() _message=\"$_message\"" 1>&2
                 return 0
         else
-                [[ "$_DEBUG" == "1" ]] && echo "DEBUG: ($$) in receiveMsg(): _message=\"$_message\"" 1>&2
+                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in receiveMsg() _message=\"$_message\"" 1>&2
                 return 1
         fi
 
+}
+
+ipc/file/messageAvailable() {
+        #  check if a message is available in the specified message box
+        #
+        #  usage:
+        #+ ipc/file/messageAvailable messageBox
+
+        local _messageBox="$1"
+
+        #                         +- list one file per line
+        #                         |  +- sort by "ctime (time of last modification of file status information)" (from ls(1))
+        #                         |  |  +- reverse listing 
+        #                         |  |  |
+        #                         |  |  |                                             +- pick the "oldest" file
+        #                         |  |  |                                             |
+        local _nextMessage=$( ls -1 -c -r "$_messageBox"/message* 2>/dev/null | head -1 )
+
+        if [[ "$_nextMessage" != "" ]]; then
+                return 0
+        else
+                return 1
+        fi
 }
 
