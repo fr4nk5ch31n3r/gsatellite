@@ -74,7 +74,7 @@ processMsg() {
 ################################################################################
 
 #  setup trap to remove inbox on exit
-trap 'ipc/file/removeLocalMsgBoxByName "$_inboxName"' EXIT
+trap 'ipc/file/removeLocalMsgBoxByName "$_inboxName"; ipc/file/sigfwd/stopSigfwd' EXIT
 
 #  Startup
 _self="$$"
@@ -88,8 +88,11 @@ _inbox=$( ipc/file/createMsgBox "$_inboxName" )
 echo $( hostname --fqdn ) > "$_gsatBaseDir/gsatlcHostName"
 echo $_self > "$_gsatBaseDir/gsatlcPid"
 
+#  start signal forwarder
+ipc/file/sigfwd/startSigfwd
+
 while [[ 1 ]]; do
-        if [[ -s "$_inbox" ]]; then
+        if ipc/file/messageAvailable "$_inbox"; then
                 _message=$( ipc/file/receiveMsg "$_inbox" )
                 processMsg "$_message" "$_inbox"
         else
