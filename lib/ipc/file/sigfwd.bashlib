@@ -31,10 +31,45 @@ INCLUDE
 
 :<<FUNCTIONS
 ipc/file/sigfwd/forwardSignal
+ipc/file/sigfwd/startSigFwd
+ipc/file/sigfwd/stopSigFwd
 FUNCTIONS
 
 _ipc_file_sigfwdInboxName="sigfwd.inbox"
+_ipc_file_sigfwdPid=""
 
+
+ipc/file/sigfwd/startSigfwd() {
+        #  start "local" signal forwarder
+        #
+        #  usage:
+        #+ ipc/file/sigfwd/startSigfwd
+
+        sigfwd &
+
+        _ipc_file_sigfwdPid="$!"
+
+        echo "$_ipc_file_sigfwdPid"
+
+        return
+}
+
+ipc/file/sigfwd/stopSigfwd() {
+        #  stop "local" signal forwarder
+        #
+        #  usage:
+        #+ ipc/file/sigfwd/stopSigfwd
+
+        if [[ -n "$_ipc_file_sigfwdPid" ]]; then
+                /bin/kill "$_ipc_file_sigfwdPid"
+                return
+        else
+                return 2
+        fi
+}
+
+#  TODO:
+#  Needs some rework (message receiving)!
 ipc/file/sigfwd/forwardSignal() {
     local _hostName="$1"
     local _pid="$2"
