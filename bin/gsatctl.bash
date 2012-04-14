@@ -145,17 +145,19 @@ gsatctl/qsub() {
         local _receivedMessage=""
 
         while [[ 1 ]]; do
-                #  This does not work!
-                #local _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
-                #  without "local" keyword, it works
-                _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
+                if ipc/file/messageAvailable "$_tempMsgBox"; then
+                        #  This does not work!
+                        #local _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
+                        #  without "local" keyword, it works
+                        _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
 
-                if [[ $? -eq 0 ]]; then
-                        #echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
-                        break
+                        if [[ $? -eq 0 ]]; then
+                                #echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
+                                break
+                        fi
+                else
+                        sleep 0.5
                 fi
-
-                sleep 0.5
         done
 
         local _receivedCommand=${_receivedMessage%%;*}
@@ -189,7 +191,7 @@ gsatctl/qdel() {
 
         #  send qdel command to gsatlc
         local _message="qdel $_jobId;$_tempMsgBox"
-.
+
         local _gsatlcHostName=$( cat "$_gsatBaseDir/gsatlcHostName" )
         local _gsatlcPid=$( cat "$_gsatBaseDir/gsatlcPid" )
         local _messageBox="$_MBOXES/$_gsatlcHostName/$_gsatlcPid.inbox" 
@@ -206,17 +208,19 @@ gsatctl/qdel() {
         local _receivedMessage=""
 
         while [[ 1 ]]; do
-                #  This does not work!
-                #local _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
-                #  without "local" keyword, it works
-                _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
+                if ipc/file/messageAvailable "$_tempMsgBox"; then
+                        #  This does not work!
+                        #local _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
+                        #  without "local" keyword, it works
+                        _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
 
-                if [[ $? -eq 0 ]]; then
-                        echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
-                        break
+                        if [[ $? -eq 0 ]]; then
+                                echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
+                                break
+                        fi
+                else
+                        sleep 0.5
                 fi
-
-                sleep 0.5
         done
 
         local _receivedCommand=${_receivedMessage%%;*}
@@ -243,8 +247,8 @@ gsatctl/listJobsInState() {
         local _jobState="$1"
 
         #  right-bound text ouptut (default!)
-        printf "%12s\t%12s\t%12s\n" "jobState" "jobId" "jobName"
-        echo -e "------------\t------------\t------------"
+        printf "%12s\t%12s\t%12s\t%12s\n" "jobState" "jobId" "jobHost" "jobName"
+        echo -e "------------\t------------\t------------\t------------"
 
         for _jobDir in $( ls -1 "$_gscheduleBaseDir/$_jobState" ); do
 
@@ -252,14 +256,17 @@ gsatctl/listJobsInState() {
 
                 local _jobId=$( basename "$_gscheduleBaseDir/$_jobState/$_jobDir" )
                 _jobId=${_jobId%.d}
+                local _jobHost=$( cat "$_gscheduleBaseDir/jobs/$_jobDir/host" 2>/dev/null )
                 local _jobName=$( basename $( readlink "$_gscheduleBaseDir/$_jobState/$_jobDir/$_jobId" ) )
 
                 #  left-bound text output ("-"!)
-                printf '%-12s\t%-12s\t%-12s\n' "$_jobState" "$_jobId" "$_jobName" >> tmpfile
+                printf '%-12s\t%-12s\t%-12s\t%-12s\n' "$_jobState" "$_jobId" "$_jobHost" "$_jobName" >> tmpfile
 
         done
 
-        cat tmpfile && rm tmpfile
+        if [[ -e tmpfile ]]; then
+                cat tmpfile && rm tmpfile
+        fi
 
         return
 }
@@ -273,8 +280,8 @@ gsatctl/listAllJobs() {
         #  perhaps locking needed before listing?
 
         #  right-bound text ouptut (default!)
-        printf "%12s\t%12s\t%12s\n" "jobState" "jobId" "jobName"
-        echo -e "------------\t------------\t------------"
+        printf "%12s\t%12s\t%12s\t%12s\n" "jobState" "jobId" "jobHost" "jobName"
+        echo -e "------------\t------------\t------------\t------------"
 
         for _jobDir in $( ls -1 "$_gscheduleBaseDir/jobs" ); do
 
@@ -283,14 +290,17 @@ gsatctl/listAllJobs() {
                 local _jobId=$( basename "$_gscheduleBaseDir/jobs/$_jobDir" )
                 _jobId=${_jobId%.d}
                 local _jobState=$( cat "$_gscheduleBaseDir/jobs/$_jobDir/state" 2>/dev/null )
+                local _jobHost=$( cat "$_gscheduleBaseDir/jobs/$_jobDir/host" 2>/dev/null )
                 local _jobName=$( basename $( readlink "$_gscheduleBaseDir/jobs/$_jobDir/$_jobId" ) )
 
                 #  left-bound text output ("-"!)
-                printf '%-12s\t%-12s\t%-12s\n' "$_jobState" "$_jobId" "$_jobName" >> tmpfile
+                printf '%-12s\t%-12s\t%-12s\t%-12s\n' "$_jobState" "$_jobId" "$_jobHost" "$_jobName" >> tmpfile
 
         done
 
-        cat tmpfile && rm tmpfile
+        if [[ -e tmpfile ]]; then
+                cat tmpfile && rm tmpfile
+        fi
 
         return
 }
