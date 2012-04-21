@@ -27,7 +27,7 @@ COPYRIGHT
 
 umask 0077
 
-_DEBUG="0"
+_DEBUG="1"
 
 _gsatlcInboxName="gsatlc.inbox"
 _gsatBaseDir=$HOME/.gsatellite

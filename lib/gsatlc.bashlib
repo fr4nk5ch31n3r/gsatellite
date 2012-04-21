@@ -64,6 +64,23 @@ gsatlc/processMsg() {
                 #echo "I: $_job submitted!"
                 return
 
+        #  event: qdel
+        elif [[ "$_command" =~ ^QDEL.* ]]; then
+                local _jobId=${_command##QDEL }
+
+                gsatlc/qdel "$_jobId"
+                local _funcRetVal="$?"
+
+                if [[ "$_funcRetVal" == "0" ]]; then
+                        ipc/file/sendMsg "$_answerBox" "OK;$_inbox"
+                elif [[ "$_funcRetVal" == "$_gschedule_errorRunningJob" ]]; then
+                        ipc/file/sendMsg "$_answerBox" "qdel failed: running job;$_inbox"
+                elif [[ "$_funcRetVal" == "$_gschedule_errorInvalidJobId" ]]; then
+                        ipc/file/sendMsg "$_answerBox" "qdel failed: invalid job id;$_inbox"
+                fi
+
+                return
+
         #  event: job terminated
         elif [[ "$_command" =~ ^TERMINATED.* ]]; then
                 #  _command is "TERMINATED <EXIT_VALUE> <JOB_ID>"
@@ -103,6 +120,19 @@ gsatlc/qsub() {
         else
                 return 1
         fi
+}
+
+gsatlc/qdel() {
+        #  remove a job from gsatellite
+        #
+        #  usage:
+        #+ gsatlc/qdel jobId
+
+        local _jobId="$1"
+
+        gschedule/removeJob "$_jobId"
+
+        return
 }
 
 gsatlc/schedule() {
@@ -217,21 +247,6 @@ gsatlc/removeJobWithJobId() {
     rm -rf "$_jobDir" &>/dev/null
 
     return "$?"
-}
-
-gsatlc/isValidJobId() {
-    #  check if the given job id is valid
-    #
-    #  usage:
-    #+ gsatlc/isValidJobId jobId
-
-    local _jobId="$1"
-
-    if grep -w "$_jobId" <( ls -1 "$_gscheduleBaseDir/jobs/" ) &>/dev/null; then
-        return 0
-    else
-        return 1
-    fi
 }
 
 gsatlc/isRunningJob() {
