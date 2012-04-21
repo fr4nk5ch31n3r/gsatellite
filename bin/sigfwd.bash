@@ -71,6 +71,8 @@ processMsg() {
         ipc/file/sendMsg "$_answerBox" "$_killRetVal;$_inbox"
 
         [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in processMsg(SIG*) after sendMsg(\"$_killRetVal;$_inbox\")." 1>&2
+
+        return
     fi
 
     #  standard functionality for message processing
