@@ -68,33 +68,33 @@ ipc/lockWithSymlink() {
 }
 
 ipc/unlockWithSymlink() {
-    #  unlock a shared resource
-    #
-    #  usage:
-    #+ ipc/unlockWithSymlink resource
+        #  unlock a shared resource
+        #
+        #  usage:
+        #+ ipc/unlockWithSymlink resource
 
-    #  alternative (un)locking with symlinks
-    local _resource="$1"
+        #  alternative (un)locking with symlinks
+        local _resource="$1"
 
-    if [[ ! -e "$_resource" ]]; then
-        return 1
-    fi
+        #  disabled, as it would otherwise not be possible to remove a resource
+        #+ before unlocking it.
+        #if [[ ! -e "$_resource" ]]; then
+        #    return 1
+        #fi
 
-    local _lockLink="$_resource.lock"
+        local _lockLink="$_resource.lock"
 
-    trap 'mv "$_lockLink" "$_lockLink.unlocked" &>/dev/null && rm "$_lockLink.unlocked" &>/dev/null' SIGINT
+        trap 'mv "$_lockLink" "$_lockLink.unlocked" &>/dev/null && rm "$_lockLink.unlocked" &>/dev/null' SIGINT
 
-    #  mv (rename) should be atomic on NFS, rm might not be atomic on NFS.
-    if mv "$_lockLink" "$_lockLink.unlocked" &>/dev/null && rm -f "$_lockLink.unlocked" &>/dev/null; then
-        #while ls "$_lockLink" &>/dev/null; do
-        #    sleep 0.1
-        #done
-        return 0
-    else
-        return 1
-    fi
-
-    return
+        #  mv (rename) should be atomic on NFS, rm might not be atomic on NFS.
+        if mv "$_lockLink" "$_lockLink.unlocked" &>/dev/null && rm -f "$_lockLink.unlocked" &>/dev/null; then
+                #while ls "$_lockLink" &>/dev/null; do
+                #    sleep 0.1
+                #done
+                return 0
+        else
+                return 1
+        fi
 }
 
 #  There are rumours that "mkdir" could be non-atomic on NFS, but "symlink"
@@ -148,11 +148,25 @@ ipc/unlockWithDir() {
 }
 
 ipc/lock() {
-    #ipc/lockWithDir $@
-    ipc/lockWithSymlink $@
+        #  lock a shared resource
+        #
+        #  usage:
+        #+ ipc/lock resource
+
+        #ipc/lockWithDir $@
+        ipc/lockWithSymlink $@
+
+        return
 }
 
 ipc/unlock() {
-    #ipc/unlockWithDir $@
-    ipc/unlockWithSymlink $@
+        #  unlock a shared resource
+        #
+        #  usage:
+        #+ ipc/unlock resource
+
+        #ipc/unlockWithDir $@
+        ipc/unlockWithSymlink $@
+
+        return
 }
