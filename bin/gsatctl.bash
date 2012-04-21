@@ -124,6 +124,13 @@ gsatctl/qsub() {
         #+ gsatctl/qsub job
         local _job="$1"
 
+        #  add absolute path if needed
+        if [[ ${_job:0:1} != "/" ]]; then
+                _job="$PWD/$_job"
+        elif [[ ${_job:0:2} == "./" ]]; then
+                _job="${PWD}${_job#.}"
+        fi
+
         local _tempMsgBox=$( ipc/file/createTempMsgBox )
 
         #  send qsub command to gsatlc
@@ -133,18 +140,22 @@ gsatctl/qsub() {
         local _gsatlcPid=$( cat "$_gsatBaseDir/gsatlcPid" )
         local _messageBox="$_MBOXES/$_gsatlcHostName/$_gsatlcPid.inbox"
 
-        ipc/file/sendMsg "$_messageBox" "$_message" || \
-        (echo "E: ipc/file/sendMsg() failed!" 1>&2 && return 1)
+        if ! ipc/file/sendMsg "$_messageBox" "$_message"; then
+                echo "E: ipc/file/sendMsg() failed!" 1>&2
+                return 1
+        fi
 
         local _signal="SIGCONT"
 
-        #  wake qsatlc with signal forwarding
+        #  wake gsatlc with signal forwarding
         ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal" || \
         (echo "E: ipc/file/sigfwd/forwardSignal() failed!" 1>&2 && return 1)
 
         local _receivedMessage=""
 
         while [[ 1 ]]; do
+                #  touch it first, so changes on other hosts are propagated
+                touch --no-create "$_tempMsgBox"
                 if ipc/file/messageAvailable "$_tempMsgBox"; then
                         #  This does not work!
                         #local _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
@@ -164,9 +175,6 @@ gsatctl/qsub() {
 
         #echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
         #echo "($$) DEBUG: _receivedCommand=\"$_receivedCommand\""
-
-        #  TODO:
-        #+ gsatlc should return the job id.
 
         if [[ "$_receivedCommand" == "qsub failed" ]]; then
                 echo "E: qsub failed!" 1>&2
@@ -190,14 +198,16 @@ gsatctl/qdel() {
         local _tempMsgBox=$( ipc/file/createTempMsgBox )
 
         #  send qdel command to gsatlc
-        local _message="qdel $_jobId;$_tempMsgBox"
+        local _message="QDEL $_jobId;$_tempMsgBox"
 
         local _gsatlcHostName=$( cat "$_gsatBaseDir/gsatlcHostName" )
         local _gsatlcPid=$( cat "$_gsatBaseDir/gsatlcPid" )
         local _messageBox="$_MBOXES/$_gsatlcHostName/$_gsatlcPid.inbox" 
 
-        ipc/file/sendMsg "$_messageBox" "$_message" || \
-        (echo "E: ipc/file/sendMsg failed!" 1>&2 && return 1)
+        if ! ipc/file/sendMsg "$_messageBox" "$_message"; then
+                echo "E: ipc/file/sendMsg failed!" 1>&2
+                return 1
+        fi
 
         local _signal="SIGCONT"
 
@@ -208,6 +218,8 @@ gsatctl/qdel() {
         local _receivedMessage=""
 
         while [[ 1 ]]; do
+                #  touch it first, so changes on other hosts are propagated
+                touch --no-create "$_tempMsgBox"
                 if ipc/file/messageAvailable "$_tempMsgBox"; then
                         #  This does not work!
                         #local _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
@@ -225,7 +237,7 @@ gsatctl/qdel() {
 
         local _receivedCommand=${_receivedMessage%%;*}
 
-        if [[ "$_receivedCommand" != "ok" ]]; then
+        if [[ "$_receivedCommand" != "OK" ]]; then
                 echo "E: qdel failed!" 1>&2
                 ipc/file/removeMsgBox "$_tempMsgBox"
                 return 1
@@ -260,7 +272,7 @@ gsatctl/listJobsInState() {
                 local _jobName=$( basename $( readlink "$_gscheduleBaseDir/$_jobState/$_jobDir/$_jobId" ) )
 
                 #  left-bound text output ("-"!)
-                printf '%-12s\t%-12s\t%-12s\t%-12s\n' "$_jobState" "$_jobId" "$_jobHost" "$_jobName" >> tmpfile
+                printf '%-12s\t%-12s\t%-12s\t%-12s\n' "$_jobState" "$_jobId" "$_jobHost" "$_jobName" #>> tmpfile
 
         done
 
@@ -294,7 +306,7 @@ gsatctl/listAllJobs() {
                 local _jobName=$( basename $( readlink "$_gscheduleBaseDir/jobs/$_jobDir/$_jobId" ) )
 
                 #  left-bound text output ("-"!)
-                printf '%-12s\t%-12s\t%-12s\t%-12s\n' "$_jobState" "$_jobId" "$_jobHost" "$_jobName" >> tmpfile
+                printf '%-12s\t%-12s\t%-12s\t%-12s\n' "$_jobState" "$_jobId" "$_jobHost" "$_jobName" #>> tmpfile
 
         done
 
