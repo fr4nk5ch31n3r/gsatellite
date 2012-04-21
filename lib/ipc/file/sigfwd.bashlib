@@ -35,6 +35,8 @@ ipc/file/sigfwd/startSigFwd
 ipc/file/sigfwd/stopSigFwd
 FUNCTIONS
 
+_DEBUG="1"
+
 _ipc_file_sigfwdInboxName="sigfwd.inbox"
 _ipc_file_sigfwdPid=""
 
@@ -71,67 +73,57 @@ ipc/file/sigfwd/stopSigfwd() {
 #  TODO:
 #  Needs some rework (message receiving)!
 ipc/file/sigfwd/forwardSignal() {
-    local _hostName="$1"
-    local _pid="$2"
-    local _signal="$3"
+        local _hostName="$1"
+        local _pid="$2"
+        local _signal="$3"
 
-    #  if target is on the same host, ...
-    if [[ "$_hostName" == $( utils/getHostName ) ]]; then
-        #  ...then use kill directly
-        kill -"$_signal" "$_pid"
-        return "$?"
-    fi
+        #  if target is on the same host, ...
+        if [[ "$_hostName" == $( utils/getHostName ) ]]; then
+                #  ...then use kill directly
+                kill -"$_signal" "$_pid"
+                return "$?"
+        fi
 
-    #  use a temporary inbox during signal forwarding
-    #local _answerBoxName="temp.inbox"
-    local _answerBox=$( ipc/file/createTempMsgBox )
+        #  use a temporary inbox during signal forwarding
+        #local _answerBoxName="temp.inbox"
+        local _answerBox=$( ipc/file/createTempMsgBox )
 
-    if [[ "$?" != "0" ]]; then
-        echo "E: Temporary message box couldn't be created! Exiting." 1>&2
+        [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in forwardSignal() _answerBox=\"$_answerBox\"" 1>&2
+
+        if [[ "$?" != "0" ]]; then
+                echo "E: Temporary message box couldn't be created! Exiting." 1>&2
+                return 1
+        fi
+
+        ipc/file/sendMsg "$_MBOXES/$_hostName/$_ipc_file_sigfwdInboxName" "$_signal $_pid;$_answerBox" || \
         return 1
-    fi
 
-    while [[ 1 ]]; do
-        #  contact responsible signal forwarder on host with _hostName
-        [[ "$_DEBUG" == "1" ]] && echo "DEBUG: ($$) in forwardSignal() before sendMsg." 1>&2
-        ipc/file/sendMsg "$_MBOXES/$_hostName/$_ipc_file_sigfwdInboxName" "$_signal $_pid;$_answerBox"
-        #echo "ipc/file/sendMsg $_MBOXES/$_hostName/$_ipc_file_sigfwdInboxName $_signal $_pid;$_answerBox"
-        _retVal="$?"        
-        if [[ "$_retVal" == "0" ]]; then
-            [[ "$_DEBUG" == "1" ]] && echo "DEBUG: sendMsg() worked!" 1>&2
-            break
-        elif [[ "$_retVal" == "1" ]]; then
-            [[ "$_DEBUG" == "1" ]] && echo "DEBUG: sendMsg() returned 1!" 1>&2
-            sleep 1
-            continue
-        elif [[ "$_retVal" == "2" ]]; then
-            echo "E: Message box \"$_messageBox\" not existing." 1>&2
-            return 1
-        fi
-            [[ "$_DEBUG" == "1" ]] && echo "DEBUG: sendMsg() returned "$_retVal"!" 1>&2
-            exit
-    done
+        local _answer=""
 
-    while [[ 1 ]]; do
-        [[ "$_DEBUG" == "1" ]] && echo "DEBUG: ($$) in forwardSignal() before receiveMsg." 1>&2
-        _answer=$( ipc/file/receiveMsg "$_answerBox" )
-        _retVal="$?"
-        if [[ "$_retVal" == "0" ]]; then
-            ipc/file/removeMsgBox "$_answerBox"
-            break
-        elif [[ "$_retVal" == "2" ]]; then
-            echo "E: Message box \"$_messageBox\" not existing." 1>&2
-            return 1
-        else
-            [[ "$_DEBUG" == "1" ]] && echo "DEBUG: receiveMsg() failed!" 1>&2
-            sleep 1
-            continue
-        fi
-    done
+        while [[ 1 ]]; do
+                #  touch it first, so changes on other hosts are propagated
+                touch --no-create "$_answerBox"
+                if ipc/file/messageAvailable "$_answerBox"; then
+                        _answer=$( ipc/file/receiveMsg "$_answerBox" )
 
-    #  _answer is "return_value_of_kill;inbox_of_sigfwd"
-    local _killRetVal=$( echo "$_answer" | cut -d ';' -f 1 )
+                        local _funcRetVal="$?"
 
-    return "$_killRetVal"    
+                        if [[ "$_funcRetVal" == "0" ]]; then
+                                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in forwardSignal() received \"$_answer\"" 1>&2
+                                ipc/file/removeMsgBox "$_answerBox"
+                                break
+                        else
+                                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in forwardSignal() receiveMsg() didn't return \"0\"" 1>&2
+                        fi
+                else
+                        sleep 0.5
+                fi
+        done
+
+
+        #  _answer is "return_value_of_kill;inbox_of_sigfwd"
+        local _killRetVal=$( echo "$_answer" | cut -d ';' -f 1 )
+
+        return "$_killRetVal"
 }
 
