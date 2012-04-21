@@ -24,6 +24,7 @@ COPYRIGHT
 
 :<<INCLUDE
 utils.bashlib
+ipc.bashlib
 INCLUDE
 
 :<<FUNCTIONS
@@ -35,6 +36,7 @@ gschedule/getJobId
 FUNCTIONS
 
 . "$_LIB"/utils.bashlib
+. "$_LIB"/ipc.bashlib
 
 _gscheduleVersion="0.0.1"
 
@@ -49,10 +51,21 @@ _gscheduleFailedDir="$_gscheduleBaseDir/failed"
 _gscheduleReadyDir="$_gscheduleBaseDir/ready"
 _gscheduleJobsDir="$_gscheduleBaseDir/jobs"
 
-#  Defined error numbers
-_err="1"
-_errCannotCreateBaseDir="20"
-_errCannotCreateJobDirs="21"
+################################################################################
+#  Defined exit codes
+#
+#  NOTICE:
+#+ We try to restrict the exit codes to codes 0 and 64 - 113, according to [1].
+#+ _____________
+#+ [1] <http://tldp.org/LDP/abs/html/exitcodes.html>
+
+readonly _err="1"
+readonly _errCannotCreateBaseDir="64"
+readonly _errCannotCreateJobDirs="65"
+readonly _gschedule_errorRunningJob="66"
+readonly _gschedule_errorInvalidJobId="67"
+################################################################################
+
 
 #  prepare gschedule dir
 if [[ ! -e "$_gscheduleBaseDir" ]]; then
@@ -234,6 +247,81 @@ gschedule/queueJob() {
         #  unlock ready dir
 
         return
+}
+
+gschedule/isRunningJob() {
+        #  check if the job with the given job id is in running state
+        #
+        #  usage:
+        #+ gschedule/isRunningJob jobId
+
+        local _jobId="$1"
+
+        local _jobState=$( cat "$_gscheduleBaseDir/jobs/$_jobId.d/state" )
+
+        if [[ "$_jobState" == "running" ]]; then
+                return 0
+        else
+                return 1
+        fi
+}
+
+gschedule/isValidJobId() {
+        #  check if the given job id is valid
+        #
+        #  usage:
+        #+ gschedule/isValidJobId jobId
+
+        local _jobId="$1"
+
+        if grep -w "$_jobId" <( ls -1 "$_gscheduleBaseDir/jobs/" ) &>/dev/null; then
+                return 0
+        else
+                return 1
+        fi
+}
+
+gschedule/removeJob() {
+        #  remove the job with the given job id
+        #
+        #  usage:
+        #+ gschedule/removeJob jobId
+
+        local _jobId="$1"
+
+        if ! gschedule/isValidJobId "$_jobId"; then
+                return "$_gschedule_errorInvalidJobId"
+        fi
+
+        #  get job dir
+        #  TODO:
+        #+ and check for existence!
+        local _jobDir="$_gscheduleBaseDir/jobs/$_jobId.d"
+
+        local _jobState=$( cat "$_jobDir/state" )
+
+        #  try to lock job dir until locked
+        while ! ipc/lock "$_jobDir"; do
+                sleep 1
+        done
+
+        #  if job is running, retreat
+        if gschedule/isRunningJob "$_jobId"; then
+                ipc/unlock "$_jobDir"
+                return "$_gschedule_errorRunningJob"
+        #  else remove job dir and link
+        else
+                #  first remove link
+                rm -f "$_gscheduleBaseDir/$_jobState/$_jobId.d"
+
+                #  then remove actual job dir
+                rm -rf "$_jobDir"
+
+                #  finally unlock it
+                ipc/unlock "$_jobDir"
+
+                return
+        fi
 }
 
 gschedule/getNextReadyJob() {
