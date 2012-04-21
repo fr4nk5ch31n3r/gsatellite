@@ -329,12 +329,16 @@ ipc/file/sendMsg() {
                 echo "$_message" > "$_messageFileWithPath" && \
                 mv "$_messageFileWithPath" "$_messageBox"/${_messageFileName##.}
                 local _sendRetVal="$?"
+                touch -mc "$_messageBox"
                 break
         done
 
         return "$_sendRetVal"
 
 }
+
+#  TODO:
+#+ Define error codes!
 
 ipc/file/receiveMsg() {
         #  receive a message from a message box
@@ -385,6 +389,8 @@ ipc/file/receiveMsg() {
                         #        sleep 0.1
                         #done
                         break
+                else
+                        sleep 1
                 fi
         done
 
