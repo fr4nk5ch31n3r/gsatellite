@@ -124,6 +124,7 @@ done
 
 while [[ 1 ]]; do
         #  touch it first, so changes on other hosts are propagated
+        touch --no-create "$_inbox"
         if ipc/file/messageAvailable "$_inbox"; then
                 _answer=$( ipc/file/receiveMsg "$_inbox" )
                 _retVal="$?"
