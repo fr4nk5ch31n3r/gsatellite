@@ -42,7 +42,7 @@ _DEBUG="0"
 
 _gsatBaseDir=$HOME/.gsatellite
 _gscheduleBaseDir="$_gsatBaseDir/gschedule"
-_gsatctlVersion="0.0.1"
+_gsatctlVersion="0.1.0"
 
 ################################################################################
 
@@ -52,6 +52,8 @@ gsatctl/usageMsg() {
 
 usage: gsatctl [--help]
        gsatctl --qsub jobFile
+       gsatctl --qhold jobId
+       gsatctl --qrls jobId
        gsatctl --qdel jobId
        gsatctl --qstat [jobState]
        gsatctl --qwait jobId
@@ -84,6 +86,10 @@ OPTIONS:
 
 -s, --qsub jobFile      Submit a job to gsatellite.
 
+-h, --qhold jobId       Hold a job identified by its job id.
+
+-r, --qrls jobId        Release a hold from a job identified by its job id.
+
 -d, --qdel jobId        Remove a job identified by its job id from gsatellite.
                         This only works for jobs that are not already in the
                         running state.
@@ -101,6 +107,8 @@ OPTIONS:
 SHORTHANDS
 
 gqsub jobFile
+qghold jobId
+gqrls jobId
 gqdel jobId
 gqstat [jobState]
 gqwait jobId
@@ -182,6 +190,69 @@ gsatctl/qsub() {
                 return 1
         else
                 echo "$_receivedCommand"
+                ipc/file/removeMsgBox "$_tempMsgBox"
+                return 0
+        fi
+
+}
+
+gsatctl/qhold() {
+        #  hold a job
+        #
+        #  usage:
+        #+ gsatctl/qhold jobId
+        local _jobId="$1"
+
+        local _tempMsgBox=$( ipc/file/createTempMsgBox )
+
+        #  send qhold command to gsatlc
+        local _message="QHOLD $_jobId;$_tempMsgBox"
+
+        local _gsatlcHostName=$( cat "$_gsatBaseDir/gsatlcHostName" )
+        local _gsatlcPid=$( cat "$_gsatBaseDir/gsatlcPid" )
+        local _messageBox="$_MBOXES/$_gsatlcHostName/$_gsatlcPid.inbox"
+
+        if ! ipc/file/sendMsg "$_messageBox" "$_message"; then
+                echo "E: ipc/file/sendMsg() failed!" 1>&2
+                return 1
+        fi
+
+        local _signal="SIGCONT"
+
+        #  wake gsatlc with signal forwarding
+        ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal" || \
+        (echo "E: ipc/file/sigfwd/forwardSignal() failed!" 1>&2 && return 1)
+
+        local _receivedMessage=""
+
+        while [[ 1 ]]; do
+                #  touch it first, so changes on other hosts are propagated
+                touch --no-create "$_tempMsgBox"
+                if ipc/file/messageAvailable "$_tempMsgBox"; then
+                        #  This does not work!
+                        #local _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
+                        #  without "local" keyword, it works
+                        _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
+
+                        if [[ $? -eq 0 ]]; then
+                                #echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
+                                break
+                        fi
+                else
+                        sleep 0.5
+                fi
+        done
+
+        local _receivedCommand=${_receivedMessage%%;*}
+
+        #echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
+        #echo "($$) DEBUG: _receivedCommand=\"$_receivedCommand\""
+
+        if [[ "$_receivedCommand" != "OK" ]]; then
+                echo "E: qhold failed!" 1>&2
+                ipc/file/removeMsgBox "$_tempMsgBox"
+                return 1
+        else
                 ipc/file/removeMsgBox "$_tempMsgBox"
                 return 0
         fi
