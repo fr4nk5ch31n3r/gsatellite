@@ -1,0 +1,37 @@
+gsatellite - Your personal job scheduler
+=========================================
+
+Contents:
+
+1.	Synopsis
+	1.1	Data paths
+	1.2	Default parameters
+2.	Creating data paths
+3.	Providing data paths
+4.	Creating default params
+5.	Providing default params
+6.	gtransfer usage examples
+
+################################################################################
+
+(1) Synopsis:
+--------------
+
+"gsatellite" - or short "gsat" - is a rather complete set of tools that in
+combination comprise a small job scheduler for personal use. In combination with
+gtransfer, gsat allows to submit and schedule possibly long running data
+transfer jobs and let them run and be monitored by a process under full control
+of but without the need of interference by a user. This way a user can log in to
+a or multiple (frontend) machines, submit his jobs and leave and let gsat take
+care of the remaining work, which includes:
+
+* scheduling a job (with a plugin and hence interchangeable scheduler)
+* running a job
+* monitoring a job
+* and possibly rerunning a job that failed
+
+A user can then return at any time and check the status of its jobs.
+
+(1.1) :
+******************
+
