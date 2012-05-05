@@ -156,8 +156,11 @@ gsatctl/qsub() {
         local _signal="SIGCONT"
 
         #  wake gsatlc with signal forwarding
-        ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal" || \
-        (echo "E: ipc/file/sigfwd/forwardSignal() failed!" 1>&2 && return 1)
+        ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal"
+        if [[ "$?" != "0" ]]; then
+                echo "E: ipc/file/sigfwd/forwardSignal() failed!" 1>&2
+                return 1
+        fi
 
         local _receivedMessage=""
 
