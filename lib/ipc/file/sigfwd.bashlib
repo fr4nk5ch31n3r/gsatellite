@@ -35,7 +35,7 @@ ipc/file/sigfwd/startSigFwd
 ipc/file/sigfwd/stopSigFwd
 FUNCTIONS
 
-_DEBUG="1"
+#_DEBUG="1"
 
 _ipc_file_sigfwdInboxName="sigfwd.inbox"
 _ipc_file_sigfwdPid=""
@@ -88,11 +88,12 @@ ipc/file/sigfwd/forwardSignal() {
         #local _answerBoxName="temp.inbox"
         local _answerBox=$( ipc/file/createTempMsgBox )
 
-        [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in forwardSignal() _answerBox=\"$_answerBox\"" 1>&2
-
         if [[ "$?" != "0" ]]; then
+                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in forwardSignal() _answerBox=\"$_answerBox\"" 1>&2
                 echo "E: Temporary message box couldn't be created! Exiting." 1>&2
                 return 1
+        else
+                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in forwardSignal() _answerBox=\"$_answerBox\"" 1>&2
         fi
 
         ipc/file/sendMsg "$_MBOXES/$_hostName/$_ipc_file_sigfwdInboxName" "$_signal $_pid;$_answerBox" || \
