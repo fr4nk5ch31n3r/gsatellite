@@ -51,6 +51,7 @@ gsatlc/processMsg() {
 
         #  event: qsub
         if [[ "$_command" =~ ^QSUB.* ]]; then
+                #  _command is "QSUB <JOB_WITH_FULL_PATH>"
                 local _job=${_command##QSUB }
 
                 local _jobId=$( gsatlc/qsub "$_job" )
@@ -66,6 +67,7 @@ gsatlc/processMsg() {
 
         #  event: qhold
         elif [[ "$_command" =~ ^QHOLD.* ]]; then
+                #  _command is "QHOLD <JOB_ID>"
                 local _jobId=${_command##QHOLD }
 
                 gsatlc/qhold "$_jobId"
@@ -81,6 +83,7 @@ gsatlc/processMsg() {
 
         #  event: qdel
         elif [[ "$_command" =~ ^QDEL.* ]]; then
+                #  _command is "QDEL <JOB_ID>"
                 local _jobId=${_command##QDEL }
 
                 gsatlc/qdel "$_jobId"
@@ -102,15 +105,18 @@ gsatlc/processMsg() {
                 local _jobId=$( echo "$_command" | cut -d ' ' -f 2 )
                 local _jobExitValue=$( echo "$_command" | cut -d ' ' -f 3 )
 
-                gschedule/handleTerminatedJob "$_jobId" "$_jobExitValue"
+                #  check if job is/was in running state
+                if gschedule/isRunningJob "$_jobId"; then
+                        gschedule/handleTerminatedJob "$_jobId" "$_jobExitValue"
 
-                if [[ "$?" == "0" ]]; then
-                        #  schedule/start next ready job
-                        gsatlc/schedule
-                        return
-                else
-                        return 1
-                fi
+                        if [[ "$?" == "0" ]]; then
+                                #  schedule/start next ready job
+                                gsatlc/schedule
+                                return
+                        else
+                                return 1
+                        fi
+                fi                
 
         #  unknown event or command
         else
