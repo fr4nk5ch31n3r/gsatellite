@@ -64,6 +64,21 @@ gsatlc/processMsg() {
                 #echo "I: $_job submitted!"
                 return
 
+        #  event: qhold
+        elif [[ "$_command" =~ ^QHOLD.* ]]; then
+                local _jobId=${_command##QHOLD }
+
+                gsatlc/qhold "$_jobId"
+                local _funcRetVal="$?"
+
+                if [[ "$_funcRetVal" == "0" ]]; then
+                        ipc/file/sendMsg "$_answerBox" "OK;$_inbox"
+                elif [[ "$_funcRetVal" == "$_gschedule_errorInvalidJobId" ]]; then
+                        ipc/file/sendMsg "$_answerBox" "qdel failed: invalid job id;$_inbox"
+                fi
+
+                return
+
         #  event: qdel
         elif [[ "$_command" =~ ^QDEL.* ]]; then
                 local _jobId=${_command##QDEL }
@@ -83,9 +98,9 @@ gsatlc/processMsg() {
 
         #  event: job terminated
         elif [[ "$_command" =~ ^TERMINATED.* ]]; then
-                #  _command is "TERMINATED <EXIT_VALUE> <JOB_ID>"
-                local _jobId=$( echo "$_command" | cut -d ' ' -f 3 )
-                local _jobExitValue=$( echo "$_command" | cut -d ' ' -f 2 )
+                #  _command is "TERMINATED <JOB_ID> <EXIT_VALUE>"
+                local _jobId=$( echo "$_command" | cut -d ' ' -f 2 )
+                local _jobExitValue=$( echo "$_command" | cut -d ' ' -f 3 )
 
                 gschedule/handleTerminatedJob "$_jobId" "$_jobExitValue"
 
@@ -120,6 +135,19 @@ gsatlc/qsub() {
         else
                 return 1
         fi
+}
+
+gsatlc/qhold() {
+        #  hold a job
+        #
+        #  usage:
+        #+ gsatlc/qhold jobId
+
+        local _jobId="$1"
+
+        gschedule/holdJob "$_jobId"
+
+        return
 }
 
 gsatlc/qdel() {

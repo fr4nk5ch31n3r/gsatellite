@@ -27,7 +27,7 @@ COPYRIGHT
 
 umask 0077
 
-_DEBUG="1"
+_DEBUG="0"
 
 _gsatlcInboxName="gsatlc.inbox"
 _gsatBaseDir=$HOME/.gsatellite
@@ -73,8 +73,12 @@ processMsg() {
 
 ################################################################################
 
+#  TODO:
+#+ On exit stop (all) running job(s). On start start jobs depending on the
+#+ scheduler.
 #  setup trap to remove inbox on exit
-trap 'ipc/file/removeLocalMsgBoxByName "$_inboxName"; ipc/file/sigfwd/stopSigfwd' EXIT
+trap 'ipc/file/removeLocalMsgBoxByName "$_inboxName"; ipc/file/sigfwd/stopSigfwd; echo "($$) Signal forwarding stopped."; echo "($$) Shutting down."' EXIT
+#trap 'ipc/file/removeLocalMsgBoxByName "$_inboxName"; ipc/file/sigfwd/stopSigfwd' EXIT
 
 #  Startup
 _self="$$"
@@ -89,7 +93,10 @@ echo $( hostname --fqdn ) > "$_gsatBaseDir/gsatlcHostName"
 echo $_self > "$_gsatBaseDir/gsatlcPid"
 
 #  start signal forwarder
-ipc/file/sigfwd/startSigfwd
+ipc/file/sigfwd/startSigfwd &>/dev/null
+
+echo "($$) Signal forwarding started."
+echo "($$) Started up."
 
 while [[ 1 ]]; do
         if ipc/file/messageAvailable "$_inbox"; then
