@@ -79,6 +79,12 @@ gschedule/fifo/schedule() {
                 #  scheduling decision
                 if gschedule/fifo/isRunableJob "$_job"; then
 
+                        #  TODO:
+                        #+ Although sputnik is started in the background by
+                        #+ gschedule/startjob, the "$( [...] )" seems to force
+                        #+ gschedule/startjob to wait for its child (sputnik).
+                        #+ This would be a problem!
+
                         #  gschedule/startJob
                         local _sputnikPid=$( gschedule/startJob "$_jobId" )
 
@@ -96,7 +102,7 @@ gschedule/fifo/schedule() {
                         gschedule/queueJob "$_job" "$_jobId"
 
                         if [[ "$?" == "0" ]]; then
-                                echo "ready" > "$_gscheduleBaseDir/jobs/$_jobId.d/state"
+                                echo "queued" > "$_gscheduleBaseDir/jobs/$_jobId.d/state"
 
                                 echo "$_jobId"
                                 return 0
@@ -106,9 +112,9 @@ gschedule/fifo/schedule() {
                 fi
 
         else
-                #  pick the oldest job from the "ready" dir (job with lowest
+                #  pick the oldest job from the "queued" dir (job with lowest
                 #+ job id) and start it.
-                local _jobId=$( gschedule/getNextReadyJob )
+                local _jobId=$( gschedule/getNextQueuedJob )
 
                 #  TODO:
                 #+ needs rework, as the only option is not evaluated and also

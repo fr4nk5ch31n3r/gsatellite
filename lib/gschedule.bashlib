@@ -48,7 +48,8 @@ _gscheduleJobIdSource="$_gscheduleBaseDir/nextJobId"
 _gscheduleRunningDir="$_gscheduleBaseDir/running"
 _gscheduleFinishedDir="$_gscheduleBaseDir/finished"
 _gscheduleFailedDir="$_gscheduleBaseDir/failed"
-_gscheduleReadyDir="$_gscheduleBaseDir/ready"
+_gscheduleHeldDir="$_gscheduleBaseDir/held"
+_gscheduleQueuedDir="$_gscheduleBaseDir/queued"
 _gscheduleJobsDir="$_gscheduleBaseDir/jobs"
 
 ################################################################################
@@ -77,7 +78,8 @@ if [[ ! -e "$_gscheduleBaseDir" ]]; then
     mkdir "$_gscheduleRunningDir" \
 	  "$_gscheduleFinishedDir" \
 	  "$_gscheduleFailedDir" \
-	  "$_gscheduleReadyDir" \
+          "$_gscheduleHeldDir" \
+	  "$_gscheduleQueuedDir" \
 	  "$_gscheduleJobsDir" &>/dev/null || \
     utils/exit "E: Cannot create job directories! Exiting." "$_errCannotCreateJobDirs"
 
@@ -109,6 +111,10 @@ gschedule/handleTerminatedJob() {
 
         local _jobId="$1"
         local _jobExitValue="$2"
+
+        if ! gschedule/isValidJobId "$_jobId"; then
+                return "$_gschedule_errorInvalidJobId"
+        fi
 
         local _jobDir="$_gscheduleBaseDir/jobs/$_jobId.d"
 
@@ -166,20 +172,22 @@ gschedule/startJob() {
 
         local _jobId="$1"
 
-        local _jobDir="$_gscheduleBaseDir/jobs/$_jobId.d"
+        local _jobDir="$_gscheduleJobsDir/$_jobId.d"
 
-        #  lock both "ready" dir and "running" dir
+        #  lock both "queued" dir and "running" dir
 
-        #  "move" the job from the "ready" dir to the "running" dir
-        rm "$_gscheduleBaseDir/ready/$_jobId.d"
+        #  "move" the job from the "queued" dir to the "running" dir
+        if [[ -e "$_gscheduleQueuedDir/$_jobId.d" ]]; then
+                rm "$_gscheduleQueuedDir/$_jobId.d" &>/dev/null
+        fi
 
-        ln -s "$_jobDir" "$_gscheduleBaseDir/running/$_jobId.d"
+        ln -s "$_jobDir" "$_gscheduleBaseDir/running/$_jobId.d" &>/dev/null
 
-        #  unlock both "ready" dir and "running" dir
+        #  unlock both "queued" dir and "running" dir
 
         local _job=$( readlink "$_gscheduleBaseDir/running/$_jobId.d/$_jobId" )
 
-        #sputnik "$_job" &
+        #sputnik "$_job" "$_jobId" &
 
         #local _gsatellitePid="$!"
 
@@ -234,17 +242,21 @@ gschedule/queueJob() {
         #  usage:
         #+ gschedule/queueJob job jobId
 
-        #  lock ready dir
+        #  lock queued dir
 
         local _job="$1"
         local _jobId="$2"
 
-        local _jobDir="$_gscheduleBaseDir/jobs/$_jobId.d"
+        local _jobDir="$_gscheduleJobsDir/$_jobId.d"
 
-        #  link the job from the "ready" dir
-        ln -s "$_jobDir" "$_gscheduleBaseDir/ready/$_jobId.d"
+        #  link the job from the "queued" dir
+        ln -s "$_jobDir" "$_gscheduleQueuedDir/$_jobId.d"
 
-        #  unlock ready dir
+        #  TODO:
+        #  Clarify if this should be done by the plugin scheduler or this function.
+        #echo "queued" > "$_gscheduleQueuedDir/$_jobId.d/state"
+
+        #  unlock queued dir
 
         return
 }
@@ -279,6 +291,95 @@ gschedule/isValidJobId() {
         else
                 return 1
         fi
+}
+
+gschedule/holdJob() {
+        #  hold the job with the given job id
+        #
+        #  usage:
+        #+ gschedule/holdJob jobId
+
+        local _jobId="$1"
+
+        if ! gschedule/isValidJobId "$_jobId"; then
+                return "$_gschedule_errorInvalidJobId"
+        fi
+
+        #  get job dir
+        #  TODO:
+        #+ and check for existence!
+        local _jobDir="$_gscheduleBaseDir/jobs/$_jobId.d"
+
+        #  try to lock job dir until locked
+        while ! ipc/lock "$_jobDir"; do
+                sleep 1
+        done        
+
+        #  if job is running, 
+        if gschedule/isRunningJob "$_jobId"; then
+                #  create temporary message box
+                local _tempMsgBox=$( ipc/file/createTempMsgBox )
+
+                #  get corresponding satellite (sputnik)
+                local _sputnikPid=$( cat "$_jobDir/sputnik.pid" )
+                local _sputnikHostname=$( cat "$_jobDir/host" )
+                local _sputnikMessageBox="$_MBOXES/$_sputnikHostname/$_sputnikPid.inbox"
+
+                local _message="HOLD;$_tempMsgBox"
+
+                #  send "HOLD" message to sputnik
+                if ! ipc/file/sendMsg "$_sputnikMessageBox" "$_message"; then
+                        echo "E: ipc/file/sendMsg() failed!" 1>&2
+                        return 1
+                fi
+
+                #  wake up sputnik
+                local _signal="SIGCONT"
+
+                #  wake sputnik with signal forwarding
+                ipc/file/sigfwd/forwardSignal "$_sputnikHostname" "$_sputnikPid" "$_signal" || \
+                (echo "E: ipc/file/sigfwd/forwardSignal() failed!" 1>&2 && return 1)
+
+                #  receive acknowledgement
+                local _receivedMessage=""
+
+                while [[ 1 ]]; do
+                        #  touch it first, so changes on other hosts are propagated
+                        touch --no-create "$_tempMsgBox"
+                        if ipc/file/messageAvailable "$_tempMsgBox"; then
+                                #  This does not work!
+                                #local _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
+                                #  without "local" keyword, it works
+                                _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
+
+                                if [[ $? -eq 0 ]]; then
+                                        #echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
+                                        break
+                                fi
+                        else
+                                sleep 0.5
+                        fi
+                done
+
+                local _receivedCommand=${_receivedMessage%%;*}
+
+                if [[ "$_receivedCommand" != "OK" ]]; then
+                        ipc/file/removeMsgBox "$_tempMsgBox"
+                        ipc/unlock "$_jobDir"
+                        return 1
+                else
+                        ipc/file/removeMsgBox "$_tempMsgBox"
+                        ipc/unlock "$_jobDir"
+                        return 0
+                fi
+        fi
+
+        #  move job to held state
+        #  TODO
+
+        ipc/unlock "$_jobDir"
+
+        return
 }
 
 gschedule/removeJob() {
@@ -324,21 +425,19 @@ gschedule/removeJob() {
         fi
 }
 
-gschedule/getNextReadyJob() {
-        #  get the job id of the oldest job in the ready dir
+gschedule/getNextQueuedJob() {
+        #  get the job id of the oldest job in the queued dir
         #
         #  usage:
-        #+ gschedule/getNextReadyJob
+        #+ gschedule/getNextQueuedJob
 
         #  TODO:
         #  Implementation
         
-        local _readyDir="$_gscheduleBaseDir/ready"
+        local _nextQueuedyJobId=$( ls -1 "$_gscheduleQueuedDir" | head -1 | cut -d '.' -f 1 )
 
-        local _nextReadyJobId=$( ls -1 "$_readyDir" | head -1 | cut -d '.' -f 1 )
-
-        if [[ "$_nextReadyJobId" != "" ]]; then
-                echo "$_nextReadyJobId"
+        if [[ "$_nextQueuedyJobId" != "" ]]; then
+                echo "$_nextQueuedyJobId"
                 return 0
         else
                 return 1
