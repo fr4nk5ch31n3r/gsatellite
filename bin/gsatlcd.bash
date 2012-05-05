@@ -5,7 +5,11 @@
 
 if [[ "$1" == "--start" ]]; then
 
-        nohup gsatlc > ./gsatlc.log 2>&1 &
+        if [[ ! -e $HOME/.gsatellite/var/log ]]; then
+                mkdir -p $HOME/.gsatellite/var/log
+        fi
+
+        nohup gsatlc > $HOME/.gsatellite/var/log/gsatlc.log 2>&1 &
         exit
 
 elif [[ "$1" == "--stop" ]]; then
