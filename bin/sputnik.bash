@@ -38,56 +38,28 @@ _gscheduleBaseDir="$_gsatBaseDir/gschedule"
 #  child libs inherit parent lib functions
 #. "$_LIB"/ipc.bashlib
 #. "$_LIB"/ipc/file.bashlib
-. "$_LIB"/ipc/file/msgproc.bashlib
-
+. "$_LIB/ipc/file/msgproc.bashlib"
+. "$_LIB/utils.bashlib"
+ 
 ################################################################################
-
-sputnik/wakeUp() {
-        #  wakes up the parent after X seconds and a variable time (depending
-        #+ on message traffic). This is done regularly after startup.
-        #
-        #  usage:
-        #+ wakeUp parentInbox parentPid seconds
-
-        local _parentInbox="$1"
-        local _parentPid="$2"
-        local _seconds="$3"
-
-        local _message="WAKE UP"
-
-        trap 'exit' TERM
-
-        while [[ 1 ]]; do
-
-                #  this makes the sleep somewhat interruptable
-                for _times in $( seq "$_seconds"); do
-                        sleep 1
-                done
-
-                #echo "wakeup"
-
-                ipc/file/sendMsg "$_parentInbox" "$_message"
-
-                #  wakeup parent
-                /bin/kill -SIGCONT $_parentPid &>/dev/null
-
-        done
-
-}
 
 sputnik/runJob() {
         #  run the gsatellite job (in the foreground) and notify parent if job
         #+ when it terminates.
         #
         #  usage:
-        #+ sputnik/runJob parentInbox parentPid job
+        #+ sputnik/runJob job parentPid parentInbox
 
-        local _parentInbox="$1"
+        local _job="$1"
         local _parentPid="$2"
-        local _job="$3"
+        local _parentInbox="$3"
+
+        #  _jobDir is "[...]/jobs/<JOB_ID>/jobtmp" 
+        local _jobDir=$( dirname "$_job" )
 
         #  run job in the foreground
-        $_job 1>$( dirname "$_job" )/../stdout 2>$( dirname "$_job" )/../stderr
+        cd "$_jobDir" && \
+        bash $_job 1>"$_jobDir/../stdout" 2>"$_jobDir/../stderr"
 
         local _jobExitValue="$?"
 
@@ -96,10 +68,7 @@ sputnik/runJob() {
 
         ipc/file/sendMsg "$_parentInbox" "$_message"
 
-        #local _signal="SIGCONT"
-
-        #  not needed, as the parent runs on the same host
-        #ipc/file/sigfwd/forwardSignal "$( hostname --fqdn )" "$_parentPid" "$_signal"
+        #  wakeup parent
         /bin/kill -SIGCONT $_parentPid &>/dev/null
 
         if [[ "$?" == "0" ]]; then
@@ -108,6 +77,7 @@ sputnik/runJob() {
                 return 1
         fi
 }
+
 
 #  reimplementation with if clauses, as this could allow to include
 #+ functionality dynamically
@@ -127,15 +97,16 @@ processMsg() {
 
         #  special functionality
         if [[ "$_command" == "WAKE UP" ]]; then
-                echo "sputnik: awake!"
+                #echo "sputnik: awake!"
                 return
         elif [[ "$_command" =~ ^TERMINATED.* ]]; then
                 #  command is "TERMINATED <EXIT_VALUE>"
-                #local _jobExitValue=$( echo "$_command" | cut -d ' ' -f 2 )
+                local _jobExitValue=$( echo "$_command" | cut -d ' ' -f 2 )
 
-                local _gsatlcMessage="$_command;$_inbox"
+                local _gsatlcMessage="TERMINATED $_jobId $_jobExitValue;$_inbox"
 
                 ipc/file/sendMsg "$_gsatlcMessageBox" "$_gsatlcMessage"
+                #echo "$_gsatlcMessageBox" "$_gsatlcMessage"
 
                 if [[ "$?" == "0" ]]; then
                         exit 0
@@ -148,43 +119,6 @@ processMsg() {
         ipc/file/msgproc/processMsg "$_message" "$_inbox"
 
         return
-}
-
-################################################################################
-#  old code
-stopJob()
-{
-	#  usage:
-	#+ stopJob _cpid
-
-	local _cpid="$1"
-	
-	kill "$_cpid"
-
-	return
-}
-
-pauseJob()
-{
-	:
-
-	return
-}
-
-getJobStatus()
-{
-	#  usage:
-	#+ getJobStatus _cpid
-
-	local _cpid="$1"
-
-	if /bin/kill -0 "$_cpid" &>/dev/null; then
-		#  job still running
-		return 0
-	else
-		#  job is dead
-		return 1
-	fi
 }
 
 ################################################################################
@@ -209,30 +143,20 @@ _inbox=$( ipc/file/createMsgBox "$_inboxName" )
 #  setup trap to stop children and remove inbox on exit
 trap '/bin/kill "$_wakeupChildPid" &>/dev/null; ipc/file/removeLocalMsgBoxByName "$_inboxName"' EXIT
 
-#  spawn signal forwarder if not already existing
-#if messagebox doesn't exist
-#  spawn sigfwd
-#fi
-
-#  contact local signal forwarder through default messagebox of signal forwarder
-#  Check if it is "ALIVE?".
-#  check aliveness with timed receiveMsg
-#  If not, start a signal forwarder.
-
 #  wake up regularly every 10 seconds
-wakeUp "10" "$_inbox" "$_self" &
+utils/wakeUp "$_self" "10" &
 
 #  child's PID
 _wakeupChildPid="$!"
 
 #  start job
-#runJob "$_job" "$_self" &
+sputnik/runJob "$_job" "$_self" "$_inbox" &
 
 #  child's PID
 #_jobChildPid="$!"
 
 while [[ 1 ]]; do
-        if [[ -s "$_inbox" ]]; then
+        if ipc/file/messageAvailable "$_inbox"; then        
                 _message=$( ipc/file/receiveMsg "$_inbox" )
                 #  process message asynchronously (assumption was to speedup message
                 #+ processing, but in reality the effect wasn't that impressive:
@@ -250,7 +174,10 @@ while [[ 1 ]]; do
                 #  pause execution
                 #  If you need something, wake me up!
                 /bin/kill -SIGSTOP "$_self"
-        fi    
+        fi
+
+        #echo "awake!"
+
 done
 
 exit

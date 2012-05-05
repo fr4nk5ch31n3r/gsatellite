@@ -25,12 +25,38 @@ COPYRIGHT
 INCLUDE
 
 :<<FUNCTIONS
+utils/wakeUp
 utils/exit
 utils/getHostName
 utils/dirname
 utils/basename
 FUNCTIONS
 
+utils/wakeUp() {
+        #  wakes up the parent after X seconds and a variable time (depending
+        #+ on message traffic). This is done regularly after startup.
+        #
+        #  usage:
+        #+ wakeUp pid seconds &
+
+        local _pid="$1"
+        local _seconds="$2"
+
+        trap 'exit' TERM
+
+        while [[ 1 ]]; do
+
+                #  this makes the sleep somewhat interruptable
+                for _times in $( seq "$_seconds"); do
+                        sleep 1
+                done
+
+                #  wakeup parent
+                /bin/kill -SIGCONT $_pid &>/dev/null
+
+        done
+
+}
 
 utils/exit() {
         #  echo _errorMsg to stderr and exit with _error
@@ -61,6 +87,8 @@ utils/getHostName() {
                 return 1
         fi
 }
+
+#  no full replacements for the ones from the core utils
 
 utils/dirname() {
         #  strip last component from file name
