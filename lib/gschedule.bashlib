@@ -56,7 +56,8 @@ _gscheduleJobsDir="$_gscheduleBaseDir/jobs"
 #  Defined exit codes
 #
 #  NOTICE:
-#+ We try to restrict the exit codes to codes 0 and 64 - 113, according to [1].
+#+ We try to restrict the exit codes to codes 0, 1 and 64 - 113, according to
+#+ [1].
 #+ _____________
 #+ [1] <http://tldp.org/LDP/abs/html/exitcodes.html>
 
@@ -189,15 +190,15 @@ gschedule/startJob() {
 
         local _job=$( readlink "$_gscheduleBaseDir/running/$_jobId.d/$_jobId" )
 
-        #sputnik "$_job" "$_jobId" &
+        sputnikd "$_job" "$_jobDir" "$_jobId"
 
         #local _gsatellitePid="$!"
 
-        local _gsatellitePid="2"
+        #local _gsatellitePid="2"
 
-        echo "$_gsatellitePid"
+        #echo "$_gsatellitePid"
 
-        return
+        return 0
 }
 
 gschedule/getJobId() {
@@ -440,10 +441,10 @@ gschedule/getNextQueuedJob() {
         #  TODO:
         #  Implementation
         
-        local _nextQueuedyJobId=$( ls -1 "$_gscheduleQueuedDir" | head -1 | cut -d '.' -f 1 )
+        local _nextQueuedJobId=$( ls -1 "$_gscheduleQueuedDir" | head -1 | cut -d '.' -f 1 )
 
-        if [[ "$_nextQueuedyJobId" != "" ]]; then
-                echo "$_nextQueuedyJobId"
+        if [[ "$_nextQueuedJobId" != "" ]]; then
+                echo "$_nextQueuedJobId"
                 return 0
         else
                 return 1
