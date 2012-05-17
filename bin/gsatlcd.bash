@@ -17,7 +17,13 @@ elif [[ "$1" == "--stop" ]]; then
         _gsatlcPid=$( cat $HOME/.gsatellite/gsatlcPid )
 
         kill "$_gsatlcPid" && kill -SIGCONT "$_gsatlcPid"
-        exit
+
+        if [[ $? -eq 0 ]]; then
+                rm -f $HOME/.gsatellite/gsatlcPid $HOME/.gsatellite/gsatlcHostName
+                exit
+        else
+                exit 1
+        fi
 
 else
         echo "usage: gsatlcd {--start|--stop}"
