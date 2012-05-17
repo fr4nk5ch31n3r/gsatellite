@@ -38,6 +38,7 @@ _gscheduleBaseDir="$_gsatBaseDir/gschedule"
 #  child libs inherit parent lib functions
 #. "$_LIB"/ipc.bashlib
 #. "$_LIB"/ipc/file.bashlib
+. "$_LIB/ipc/file/sigfwd.bashlib"
 . "$_LIB/ipc/file/msgproc.bashlib"
 . "$_LIB/utils.bashlib"
  
@@ -55,11 +56,11 @@ sputnik/runJob() {
         local _parentInbox="$3"
 
         #  _jobDir is "[...]/jobs/<JOB_ID>/jobtmp" 
-        local _jobDir=$( dirname "$_job" )
+        local _jobTmpDir=$( dirname "$_job" )
 
         #  run job in the foreground
-        cd "$_jobDir" && \
-        bash $_job 1>"$_jobDir/../stdout" 2>"$_jobDir/../stderr"
+        cd "$_jobTmpDir" && \
+        bash $_job 1>"$_jobTmpDir/../stdout" 2>"$_jobTmpDir/../stderr"
 
         local _jobExitValue="$?"
 
@@ -106,7 +107,11 @@ processMsg() {
                 local _gsatlcMessage="TERMINATED $_jobId $_jobExitValue;$_inbox"
 
                 ipc/file/sendMsg "$_gsatlcMessageBox" "$_gsatlcMessage"
-                #echo "$_gsatlcMessageBox" "$_gsatlcMessage"
+                
+                local _signal="SIGCONT"
+
+                #  wake gsatlc with signal forwarding
+                ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal"
 
                 if [[ "$?" == "0" ]]; then
                         exit 0
@@ -125,7 +130,8 @@ processMsg() {
 
 #  a gsatellite job is a shell script
 _job="$1"
-_jobId="$2"
+_jobDir="$2"
+_jobId="$3"
 
 #if [[ ! -e "$_job" ]]; then
 #	exit 1
@@ -153,7 +159,10 @@ _wakeupChildPid="$!"
 sputnik/runJob "$_job" "$_self" "$_inbox" &
 
 #  child's PID
-#_jobChildPid="$!"
+_jobChildPid="$!"
+
+#  save PID
+echo "$_self" > "$_jobDir/sputnik.pid"
 
 while [[ 1 ]]; do
         if ipc/file/messageAvailable "$_inbox"; then        
