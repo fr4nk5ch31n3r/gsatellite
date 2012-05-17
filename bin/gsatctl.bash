@@ -130,6 +130,9 @@ gsatctl/qsub() {
         #
         #  usage:
         #+ gsatctl/qsub job
+
+        #  TODO:
+        #+ Check if job is really existing.
         local _job="$1"
 
         #  add absolute path if needed
