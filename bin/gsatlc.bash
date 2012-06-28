@@ -34,8 +34,19 @@ _gsatBaseDir=$HOME/.gsatellite
 
 _scheduler="fifo"
 
+#  path to path configuration file (prefer system paths!)
+if [[ -e "/opt/gsatellite/etc/paths.conf" ]]; then
+        _pathsConfigurationFile="/opt/gsatellite/etc/paths.conf"
+#sed#elif [[ -e "<PATH_TO_GSATELLITE>/etc/paths.conf" ]]; then
+#sed#    _pathsConfigurationFile="<PATH_TO_GSATELLITE>/etc/paths.conf"
+elif [[ -e "/etc/opt/gsatellite/etc/paths.conf" ]]; then
+        _pathsConfigurationFile="/etc/opt/gsatellite/etc/paths.conf"
+elif [[ -e "$HOME/.gsatellite/paths.conf" ]]; then
+        _pathsConfigurationFile="$HOME/.gsatellite/paths.conf"
+fi
+
 #  include path config
-. /opt/gsatellite/etc/path.conf
+. "$_pathsConfigurationFile"
 
 #. "$_LIB"/ipc.bashlib
 #. "$_LIB"/ipc/file.bashlib
@@ -74,10 +85,11 @@ processMsg() {
 ################################################################################
 
 #  TODO:
-#+ On exit stop (all) running job(s). On start start jobs depending on the
+#+ On exit, stop (all) running job(s). On start, start jobs depending on the
 #+ scheduler.
+
 #  setup trap to remove inbox on exit
-trap 'ipc/file/removeLocalMsgBoxByName "$_inboxName"; ipc/file/sigfwd/stopSigfwd; echo "($$) Signal forwarding stopped."; echo "($$) Shutting down."' EXIT
+trap 'ipc/file/removeLocalMsgBoxByName "$_inboxName"; sigfwdd --stop && echo "($$) Signal forwarding stopped."; echo "($$) Shutting down."' EXIT
 #trap 'ipc/file/removeLocalMsgBoxByName "$_inboxName"; ipc/file/sigfwd/stopSigfwd' EXIT
 
 #  Startup
@@ -93,7 +105,8 @@ echo $( hostname --fqdn ) > "$_gsatBaseDir/gsatlcHostName"
 echo $_self > "$_gsatBaseDir/gsatlcPid"
 
 #  start signal forwarder
-ipc/file/sigfwd/startSigfwd &>/dev/null
+#ipc/file/sigfwd/startSigfwd &>/dev/null
+sigfwdd --start
 
 echo "($$) Signal forwarding started."
 echo "($$) Started up."

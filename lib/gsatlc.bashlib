@@ -30,6 +30,7 @@ INCLUDE
 FUNCTIONS
 
 _scheduler="fifo"
+#_scheduler="nobatch"
 
 . "$_LIB"/ipc.bashlib
 . "$_LIB"/gschedule/$_scheduler.bashlib
@@ -76,7 +77,23 @@ gsatlc/processMsg() {
                 if [[ "$_funcRetVal" == "0" ]]; then
                         ipc/file/sendMsg "$_answerBox" "OK;$_inbox"
                 elif [[ "$_funcRetVal" == "$_gschedule_errorInvalidJobId" ]]; then
-                        ipc/file/sendMsg "$_answerBox" "qdel failed: invalid job id;$_inbox"
+                        ipc/file/sendMsg "$_answerBox" "qhold failed: invalid job id;$_inbox"
+                fi
+
+                return
+
+        #  event: qrls
+        elif [[ "$_command" =~ ^QRLS.* ]]; then
+                #  _command is "QRLS <JOB_ID>"
+                local _jobId=${_command##QRLS }
+
+                gsatlc/qrls "$_jobId"
+                local _funcRetVal="$?"
+
+                if [[ "$_funcRetVal" == "0" ]]; then
+                        ipc/file/sendMsg "$_answerBox" "OK;$_inbox"
+                elif [[ "$_funcRetVal" == "$_gschedule_errorInvalidJobId" ]]; then
+                        ipc/file/sendMsg "$_answerBox" "qrls failed: invalid job id;$_inbox"
                 fi
 
                 return
@@ -125,6 +142,7 @@ gsatlc/processMsg() {
         fi
 }
 
+
 gsatlc/qsub() {
         #  submit a job to gsatellite
         #
@@ -143,6 +161,7 @@ gsatlc/qsub() {
         fi
 }
 
+
 gsatlc/qhold() {
         #  hold a job
         #
@@ -156,6 +175,22 @@ gsatlc/qhold() {
         return
 }
 
+
+gsatlc/qrls() {
+        #  release a hold on a job
+        #
+        #  usage:
+        #+ gsatlc/qrls jobId
+
+        local _jobId="$1"
+
+        gschedule/releaseJob "$_jobId"
+        gsatlc/schedule
+
+        return
+}
+
+
 gsatlc/qdel() {
         #  remove a job from gsatellite
         #
@@ -168,6 +203,7 @@ gsatlc/qdel() {
 
         return
 }
+
 
 gsatlc/schedule() {
         #  call scheduler to start the next ready job

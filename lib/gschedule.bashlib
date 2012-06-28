@@ -61,11 +61,11 @@ _gscheduleJobsDir="$_gscheduleBaseDir/jobs"
 #+ _____________
 #+ [1] <http://tldp.org/LDP/abs/html/exitcodes.html>
 
-readonly _err="1"
-readonly _errCannotCreateBaseDir="64"
-readonly _errCannotCreateJobDirs="65"
-readonly _gschedule_errorRunningJob="66"
-readonly _gschedule_errorInvalidJobId="67"
+_err="1"
+_errCannotCreateBaseDir="64"
+_errCannotCreateJobDirs="65"
+_gschedule_errorRunningJob="66"
+_gschedule_errorInvalidJobId="67"
 ################################################################################
 
 
@@ -360,7 +360,7 @@ gschedule/holdJob() {
                                 _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
 
                                 if [[ $? -eq 0 ]]; then
-                                        #echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
+                                        echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
                                         break
                                 fi
                         else
@@ -370,24 +370,62 @@ gschedule/holdJob() {
 
                 local _receivedCommand=${_receivedMessage%%;*}
 
-                if [[ "$_receivedCommand" != "OK" ]]; then
-                        ipc/file/removeMsgBox "$_tempMsgBox"
-                        ipc/unlock "$_jobDir"
-                        return 1
-                else
+                if [[ "$_receivedCommand" == "OK" ]]; then
                         ipc/file/removeMsgBox "$_tempMsgBox"
                         ipc/unlock "$_jobDir"
                         return 0
+                else
+                        ipc/file/removeMsgBox "$_tempMsgBox"
+                        ipc/unlock "$_jobDir"
+                        return 1
                 fi
         fi
 
         #  move job to held state
-        #  TODO
+        rm "$_gscheduleBaseDir/$( gschedule/getJobState $_jobId )/$_jobId.d"
+
+        ln -s "$_jobDir" "$_gscheduleHeldDir/$_jobId.d" && \
+        echo "held" > "$_gscheduleJobsDir/$_jobId.d/state"
 
         ipc/unlock "$_jobDir"
 
         return
 }
+
+
+gschedule/releaseJob() {
+        #  hold the job with the given job id
+        #
+        #  usage:
+        #+ gschedule/releaseJob jobId
+
+        local _jobId="$1"
+
+        if ! gschedule/isValidJobId "$_jobId"; then
+                return "$_gschedule_errorInvalidJobId"
+        fi
+
+        #  get job dir
+        #  TODO:
+        #+ and check for existence!
+        local _jobDir="$_gscheduleBaseDir/jobs/$_jobId.d"
+
+        #  try to lock job dir until locked
+        while ! ipc/lock "$_jobDir"; do
+                sleep 1
+        done        
+
+        #  release job
+        rm "$_gscheduleBaseDir/held/$_jobId.d"
+
+        ln -s "$_jobDir" "$_gscheduleQueuedDir/$_jobId.d" && \
+        echo "queued" > "$_gscheduleJobsDir/$_jobId.d/state"
+
+        ipc/unlock "$_jobDir"
+
+        return
+}
+
 
 gschedule/removeJob() {
         #  remove the job with the given job id
@@ -430,6 +468,28 @@ gschedule/removeJob() {
 
                 return
         fi
+}
+
+gschedule/getJobState() {
+        #  usage:
+        #+ gschedule/getJobState jobId
+
+        local _jobId="$1"
+
+        if ! gschedule/isValidJobId "$_jobId"; then
+                return "$_gschedule_errorInvalidJobId"
+        fi
+
+        #  get job dir
+        #  TODO:
+        #+ and check for existence!
+        local _jobDir="$_gscheduleBaseDir/jobs/$_jobId.d"
+
+        local _jobState=$( cat "$_jobDir/state" )
+
+        echo "$_jobState"
+
+        return
 }
 
 gschedule/getNextQueuedJob() {

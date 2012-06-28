@@ -30,13 +30,27 @@ umask 0077
 
 _DEBUG="1"
 
+_gsatBaseDir=$HOME/.gsatellite
+
+#  path to path configuration file (prefer system paths!)
+if [[ -e "/opt/gsatellite/etc/paths.conf" ]]; then
+        _pathsConfigurationFile="/opt/gsatellite/etc/paths.conf"
+#sed#elif [[ -e "<PATH_TO_GSATELLITE>/etc/paths.conf" ]]; then
+#sed#    _pathsConfigurationFile="<PATH_TO_GSATELLITE>/etc/paths.conf"
+elif [[ -e "/etc/opt/gsatellite/etc/paths.conf" ]]; then
+        _pathsConfigurationFile="/etc/opt/gsatellite/etc/paths.conf"
+elif [[ -e "$HOME/.gsatellite/paths.conf" ]]; then
+        _pathsConfigurationFile="$HOME/.gsatellite/paths.conf"
+fi
+
 #  include path config
-. /opt/gsatellite/etc/path.conf
+. "$_pathsConfigurationFile"
 
 #. $_LIB/ipc.bashlib
 #. $_LIB/ipc/file.bashlib
 . "$_LIB"/ipc/file/sigfwd.bashlib
 . "$_LIB"/ipc/file/msgproc.bashlib
+. "$_LIB"/utils.bashlib
 
 
 processMsg() {
@@ -86,7 +100,8 @@ processMsg() {
 
 trap 'ipc/file/removeMsgBox "$_inbox" && ipc/file/removeMsgBox "$_aliasInbox"' EXIT
 
-_inboxName="$$.inbox"
+_self="$$"
+_inboxName="$_self.inbox"
 
 #  create or truncate inbox
 _inbox=$( ipc/file/createMsgBox "$_inboxName" )
@@ -96,6 +111,13 @@ _aliasInboxName="$_ipc_file_sigfwdInboxName"
 #ln -s "$( basename $_inbox )" "$( dirname $_inbox )/$_inboxAliasName"
 #_aliasInbox="$( dirname $_inbox )/$_inboxAliasName"
 _aliasInbox=$( ipc/file/createAliasMsgBox "$_inbox" "$_aliasInboxName" )
+
+#  save pid
+_hostName=$( utils/getHostName )
+if [[ ! -e "$_gsatBaseDir/var/run/$_hostName" ]]; then
+        mkdir -p "$_gsatBaseDir/var/run/$_hostName"
+fi
+echo $_self > "$_gsatBaseDir/var/run/$_hostName/sigfwdPid"
 
 ################################################################################
 
