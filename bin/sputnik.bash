@@ -27,8 +27,19 @@ umask 0077
 
 _DEBUG="0"
 
+#  path to path configuration file (prefer system paths!)
+if [[ -e "/opt/gsatellite/etc/paths.conf" ]]; then
+        _pathsConfigurationFile="/opt/gsatellite/etc/paths.conf"
+#sed#elif [[ -e "<PATH_TO_GSATELLITE>/etc/paths.conf" ]]; then
+#sed#    _pathsConfigurationFile="<PATH_TO_GSATELLITE>/etc/paths.conf"
+elif [[ -e "/etc/opt/gsatellite/etc/paths.conf" ]]; then
+        _pathsConfigurationFile="/etc/opt/gsatellite/etc/paths.conf"
+elif [[ -e "$HOME/.gsatellite/paths.conf" ]]; then
+        _pathsConfigurationFile="$HOME/.gsatellite/paths.conf"
+fi
+
 #  include path config
-. /opt/gsatellite/etc/path.conf
+. "$_pathsConfigurationFile"
 
 _gsatBaseDir=$HOME/.gsatellite
 _gscheduleBaseDir="$_gsatBaseDir/gschedule"
@@ -44,9 +55,23 @@ _gscheduleBaseDir="$_gsatBaseDir/gschedule"
  
 ################################################################################
 
+sputnik/holdJob() {
+        #  Put a hold on a job
+        #
+        #  usage:
+        #+ sputnik/holdJob job
+
+        local _job="$1"
+
+        local _jobTmpDir=$( dirname "$_job" )
+
+        local _jobType="default"
+
+        
+}
+
 sputnik/runJob() {
-        #  run the gsatellite job (in the foreground) and notify parent if job
-        #+ when it terminates.
+        #  run the gsatellite job and notify parent when it terminates.
         #
         #  usage:
         #+ sputnik/runJob job parentPid parentInbox
@@ -58,9 +83,18 @@ sputnik/runJob() {
         #  _jobDir is "[...]/jobs/<JOB_ID>/jobtmp" 
         local _jobTmpDir=$( dirname "$_job" )
 
-        #  run job in the foreground
+        #  run job in the background to get its PID. We need its PID to be able
+        #+ to interact with it with signals later.
         cd "$_jobTmpDir" && \
-        bash $_job 1>"$_jobTmpDir/../stdout" 2>"$_jobTmpDir/../stderr"
+        bash $_job 1>"$_jobTmpDir/../stdout" 2>"$_jobTmpDir/../stderr" &
+
+        local _jobPid="$!"
+
+        #  save job's PID
+        echo "$_jobPid" > "$_jobDir/job.pid"
+
+        #  wait for the job to terminate
+        wait "$_jobPid"
 
         local _jobExitValue="$?"
 
@@ -100,6 +134,7 @@ processMsg() {
         if [[ "$_command" == "WAKE UP" ]]; then
                 #echo "sputnik: awake!"
                 return
+
         elif [[ "$_command" =~ ^TERMINATED.* ]]; then
                 #  command is "TERMINATED <EXIT_VALUE>"
                 local _jobExitValue=$( echo "$_command" | cut -d ' ' -f 2 )
@@ -118,6 +153,35 @@ processMsg() {
                 else
                         exit 1
                 fi
+
+        elif [[ "$_command" =~ ^HOLD$ ]]; then
+                #  command is "HOLD"
+                #  TODO:
+                #+ Encapsulate "holding a job" in different libs depending on
+                #+ the job type.
+
+                #  Actually hold the job
+                sputnik/holdJob "$_job"
+
+                if [[ "$?" == "0" ]]; then
+                        local _gsatlcMessage="OK;$_inbox"
+                else
+                        local _gsatlcMessage="HOLD FAILED;$_inbox"
+                fi
+
+                ipc/file/sendMsg "$_gsatlcMessageBox" "$_gsatlcMessage"
+                
+                local _signal="SIGCONT"
+
+                #  wake gsatlc with signal forwarding
+                ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal"
+
+                if [[ "$?" == "0" ]]; then
+                        return 0
+                else
+                        return 1
+                fi
+
         fi
 
         #  standard functionality for message processing
