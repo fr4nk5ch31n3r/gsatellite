@@ -27,9 +27,21 @@ umask 0077
 
 _DEBUG="0"
 
-#  include path config
-. /opt/gsatellite/etc/path.conf
+#  path to path configuration file (prefer system paths!)
+if [[ -e "/opt/gsatellite/etc/paths.conf" ]]; then
+        _pathsConfigurationFile="/opt/gsatellite/etc/paths.conf"
+#sed#elif [[ -e "<PATH_TO_GSATELLITE>/etc/paths.conf" ]]; then
+#sed#    _pathsConfigurationFile="<PATH_TO_GSATELLITE>/etc/paths.conf"
+elif [[ -e "/etc/opt/gsatellite/etc/paths.conf" ]]; then
+        _pathsConfigurationFile="/etc/opt/gsatellite/etc/paths.conf"
+elif [[ -e "$HOME/.gsatellite/paths.conf" ]]; then
+        _pathsConfigurationFile="$HOME/.gsatellite/paths.conf"
+fi
 
+#  include path config
+. "$_pathsConfigurationFile"
+
+#  include needed libaries
 #. "$_LIB"/ipc.bashlib
 #. "$_LIB"/ipc/file.bashlib
 . "$_LIB"/ipc/file/sigfwd.bashlib
@@ -37,6 +49,8 @@ _DEBUG="0"
 . "$_LIB"/utils.bashlib
 
 . "$_LIB"/gsatlc.bashlib
+
+. "$_LIB"/gschedule.bashlib
 
 ################################################################################
 
@@ -79,8 +93,8 @@ gsatctl [options]
 DESCRIPTION:
 
 gsatctl - the gsatellite controller - is the user interface to gsatellite. It
-allows for job submission and manipulation like stopping or pausing a job. It
-can also show information about all gsatellite jobs.
+allows for job submission and manipulation. It can also show information about
+all gsatellite jobs.
 
 OPTIONS:
 
@@ -125,6 +139,7 @@ gsatctl/versionMsg() {
         return
 }
 
+
 gsatctl/qsub() {
         #  submit a job to gsatellite
         #
@@ -142,11 +157,20 @@ gsatctl/qsub() {
                 _job="${PWD}${_job#.}"
         fi
 
+        #  If job's not existing, retreat.
+        if [[ ! -e "$_job" ]]; then
+                echo "E: Job not existing!" 1>&2
+                return 1
+        fi
+
         local _tempMsgBox=$( ipc/file/createTempMsgBox )
 
         #  send qsub command to gsatlc
         local _message="QSUB $_job;$_tempMsgBox"
 
+        #  TODO:
+        #+ Cover the case when gsatlc is not running! Also for other qx
+        #+ functions!
         local _gsatlcHostName=$( cat "$_gsatBaseDir/gsatlcHostName" )
         local _gsatlcPid=$( cat "$_gsatBaseDir/gsatlcPid" )
         local _messageBox="$_MBOXES/$_gsatlcHostName/$_gsatlcPid.inbox"
@@ -202,12 +226,17 @@ gsatctl/qsub() {
 
 }
 
+
 gsatctl/qhold() {
         #  hold a job
         #
         #  usage:
         #+ gsatctl/qhold jobId
         local _jobId="$1"
+
+        #  TODO:
+        #+ Only hold jobs that are in state "queued" or "running". And also
+        #+ introduce second path that avoids message communication.
 
         local _tempMsgBox=$( ipc/file/createTempMsgBox )
 
@@ -241,7 +270,7 @@ gsatctl/qhold() {
                         _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
 
                         if [[ $? -eq 0 ]]; then
-                                #echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
+                                echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
                                 break
                         fi
                 else
@@ -265,6 +294,79 @@ gsatctl/qhold() {
 
 }
 
+
+gsatctl/qrls() {
+        #  release a hold on a job
+        #
+        #  usage:
+        #+ gsatctl/qrls jobId
+        local _jobId="$1"
+
+        #  Integrated second possible path which checks directly if a job is
+        #+ running without interacting with gsatlc. This saves some cycles.
+        if [[ $( gschedule/getJobState "$_jobId" ) != "held" ]]; then
+                #  retreat
+                echo "E: qrls failed! Job \"$_jobId\" not in held state!" 1>&2
+                return 1
+        else
+
+                local _tempMsgBox=$( ipc/file/createTempMsgBox )
+
+                #  send qhold command to gsatlc
+                local _message="QRLS $_jobId;$_tempMsgBox"
+
+                local _gsatlcHostName=$( cat "$_gsatBaseDir/gsatlcHostName" )
+                local _gsatlcPid=$( cat "$_gsatBaseDir/gsatlcPid" )
+                local _messageBox="$_MBOXES/$_gsatlcHostName/$_gsatlcPid.inbox"
+
+                if ! ipc/file/sendMsg "$_messageBox" "$_message"; then
+                        echo "E: ipc/file/sendMsg() failed!" 1>&2
+                        return 1
+                fi
+
+                local _signal="SIGCONT"
+
+                #  wake gsatlc with signal forwarding
+                ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal" || \
+                (echo "E: ipc/file/sigfwd/forwardSignal() failed!" 1>&2 && return 1)
+
+                local _receivedMessage=""
+
+                while [[ 1 ]]; do
+                        #  touch it first, so changes on other hosts are propagated
+                        touch --no-create "$_tempMsgBox"
+                        if ipc/file/messageAvailable "$_tempMsgBox"; then
+                                #  This does not work!
+                                #local _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
+                                #  without "local" keyword, it works
+                                _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
+
+                                if [[ $? -eq 0 ]]; then
+                                        echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
+                                        break
+                                fi
+                        else
+                                sleep 0.5
+                        fi
+                done
+
+                local _receivedCommand=${_receivedMessage%%;*}
+
+                #echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
+                #echo "($$) DEBUG: _receivedCommand=\"$_receivedCommand\""
+
+                if [[ "$_receivedCommand" != "OK" ]]; then
+                        echo "E: qrls failed!" 1>&2
+                        ipc/file/removeMsgBox "$_tempMsgBox"
+                        return 1
+                else
+                        ipc/file/removeMsgBox "$_tempMsgBox"
+                        return 0
+                fi
+        fi
+}
+
+
 gsatctl/qdel() {
         #  remove a job from gsatellite
         #
@@ -272,60 +374,70 @@ gsatctl/qdel() {
         #+ gsatctl/qdel jobId
         local _jobId="$1"
 
-        local _tempMsgBox=$( ipc/file/createTempMsgBox )
-
-        #  send qdel command to gsatlc
-        local _message="QDEL $_jobId;$_tempMsgBox"
-
-        local _gsatlcHostName=$( cat "$_gsatBaseDir/gsatlcHostName" )
-        local _gsatlcPid=$( cat "$_gsatBaseDir/gsatlcPid" )
-        local _messageBox="$_MBOXES/$_gsatlcHostName/$_gsatlcPid.inbox" 
-
-        if ! ipc/file/sendMsg "$_messageBox" "$_message"; then
-                echo "E: ipc/file/sendMsg failed!" 1>&2
-                return 1
-        fi
-
-        local _signal="SIGCONT"
-
-        #  wake qsatlc with signal forwarding
-        ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal" || \
-        (echo "E: ipc/file/sigfwd/forwardSignal() failed!" 1>&2 && return 1)
-
-        local _receivedMessage=""
-
-        while [[ 1 ]]; do
-                #  touch it first, so changes on other hosts are propagated
-                touch --no-create "$_tempMsgBox"
-                if ipc/file/messageAvailable "$_tempMsgBox"; then
-                        #  This does not work!
-                        #local _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
-                        #  without "local" keyword, it works
-                        _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
-
-                        if [[ $? -eq 0 ]]; then
-                                echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
-                                break
-                        fi
-                else
-                        sleep 0.5
-                fi
-        done
-
-        local _receivedCommand=${_receivedMessage%%;*}
-
-        if [[ "$_receivedCommand" != "OK" ]]; then
+        #  Integrated second possible path which checks directly if a job is
+        #+ running without interacting with gsatlc. This saves some cycles.
+        if gschedule/isRunningJob "$_jobId"; then
+                #  retreat
                 echo "E: qdel failed!" 1>&2
-                ipc/file/removeMsgBox "$_tempMsgBox"
                 return 1
         else
-                ipc/file/removeMsgBox "$_tempMsgBox"
-                return 0
+
+                local _tempMsgBox=$( ipc/file/createTempMsgBox )
+
+                #  send qdel command to gsatlc
+                local _message="QDEL $_jobId;$_tempMsgBox"
+
+                local _gsatlcHostName=$( cat "$_gsatBaseDir/gsatlcHostName" )
+                local _gsatlcPid=$( cat "$_gsatBaseDir/gsatlcPid" )
+                local _messageBox="$_MBOXES/$_gsatlcHostName/$_gsatlcPid.inbox" 
+
+                if ! ipc/file/sendMsg "$_messageBox" "$_message"; then
+                        echo "E: ipc/file/sendMsg failed!" 1>&2
+                        return 1
+                fi
+
+                local _signal="SIGCONT"
+
+                #  wake qsatlc with signal forwarding
+                ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal" || \
+                (echo "E: ipc/file/sigfwd/forwardSignal() failed!" 1>&2 && return 1)
+
+                local _receivedMessage=""
+
+                while [[ 1 ]]; do
+                        #  touch it first, so changes on other hosts are propagated
+                        touch --no-create "$_tempMsgBox"
+                        if ipc/file/messageAvailable "$_tempMsgBox"; then
+                                #  This does not work!
+                                #local _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
+                                #  without "local" keyword, it works
+                                _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
+
+                                if [[ $? -eq 0 ]]; then
+                                        echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
+                                        break
+                                fi
+                        else
+                                sleep 0.5
+                        fi
+                done
+
+                local _receivedCommand=${_receivedMessage%%;*}
+
+                if [[ "$_receivedCommand" != "OK" ]]; then
+                        echo "E: qdel failed!" 1>&2
+                        ipc/file/removeMsgBox "$_tempMsgBox"
+                        return 1
+                else
+                        ipc/file/removeMsgBox "$_tempMsgBox"
+                        return 0
+                fi
         fi
 
         return
 
 }
+
 
 gsatctl/listJobsInState() {
         #  list gsatellite jobs in specified state
@@ -359,6 +471,7 @@ gsatctl/listJobsInState() {
 
         return
 }
+
 
 gsatctl/listAllJobs() {
         #  list all gsatellite jobs
@@ -394,6 +507,7 @@ gsatctl/listAllJobs() {
         return
 }
 
+
 gsatctl/qstat() {
         #  show info about jobs
         #
@@ -421,6 +535,14 @@ gsatctl/qstat() {
 case $( basename "$0" ) in
         "gqstat")
                 exec gsatctl --qstat "$@"
+                ;;
+
+        "gqhold")
+                exec gsatctl --qhold "$@"
+                ;;
+
+        "gqrls")
+                exec gsatctl --qrls "$@"
                 ;;
 
         "gqsub")
@@ -457,6 +579,8 @@ while [[ "$1" != "" ]]; do
 	if [[   "$1" != "--help" && \
                 "$1" != "--version" && "$1" != "-V" && \
                 "$1" != "--qsub" && "$1" != "-s" && \
+                "$1" != "--qhold" && "$1" != "-h" && \
+                "$1" != "--qrls" && "$1" != "-r" && \
                 "$1" != "--qdel" && "$1" != "-d" && \
                 "$1" != "--qstat" && "$1" != "-l" && \
                 "$1" != "--qwait" && "$1" != "-w" \
@@ -495,7 +619,7 @@ while [[ "$1" != "" ]]; do
                         exit
                 else
 	                #  duplicate usage of this parameter
-	                echo "ERROR: The parameter \"--qsub|-s\" cannot be used multiple times!"
+	                echo "ERROR: The option \"$_option\" cannot be used multiple times!"
 	                exit 1
                 fi
 
@@ -518,7 +642,7 @@ while [[ "$1" != "" ]]; do
                         exit
                 else
 	                #  duplicate usage of this parameter
-	                echo "ERROR: The parameter \"--qdel|-d\" cannot be used multiple times!"
+	                echo "ERROR: The option \"$_option\" cannot be used multiple times!"
 	                exit 1
                 fi
 
@@ -541,7 +665,79 @@ while [[ "$1" != "" ]]; do
                         exit
                 else
                         #  duplicate usage of this parameter
-                        echo "ERROR: The parameter \"--qstat|-l\" cannot be used multiple times!"
+                        echo "ERROR: The option \"$_option\" cannot be used multiple times!"
+                        exit 1
+                fi
+
+        #  "--qhold|-h jobId"
+        elif [[ "$1" == "--qhold" || "$1" == "-h" ]]; then
+                _option="$1"
+                if [[ "$_jobIdSet" != "0" ]]; then
+                        shift 1
+                        #  next positional parameter an option or an option parameter?
+                        if [[ ! "$1" =~ ^-.* && "$1" != "" ]]; then
+                                _jobId="$1"
+                                _jobIdSet="0"
+                                shift 1
+                        else
+                                echo "E: missing option parameter for \"$_option\"!"
+                                exit 1
+                        fi
+
+                        #echo "Sorry, function is not available yet!"
+                        gsatctl/qhold "$_jobId"
+                        exit
+                else
+                        #  duplicate usage of this parameter
+                        echo "ERROR: The option \"$_option\" cannot be used multiple times!"
+                        exit 1
+                fi
+
+        #  "--qrls|-r jobId"
+        elif [[ "$1" == "--qrls" || "$1" == "-r" ]]; then
+                _option="$1"
+                if [[ "$_jobIdSet" != "0" ]]; then
+                        shift 1
+                        #  next positional parameter an option or an option parameter?
+                        if [[ ! "$1" =~ ^-.* && "$1" != "" ]]; then
+                                _jobId="$1"
+                                _jobIdSet="0"
+                                shift 1
+                        else
+                                echo "E: missing option parameter for \"$_option\"!"
+                                exit 1
+                        fi
+
+                        #echo "Sorry, function is not available yet!"
+                        gsatctl/qrls "$_jobId"
+                        exit
+                else
+                        #  duplicate usage of this parameter
+                        echo "ERROR: The option \"$_option\" cannot be used multiple times!"
+                        exit 1
+                fi
+
+        #  "--qwait|-w jobId"
+        elif [[ "$1" == "--qwait" || "$1" == "-w" ]]; then
+                _option="$1"
+                if [[ "$_jobIdSet" != "0" ]]; then
+                        shift 1
+                        #  next positional parameter an option or an option parameter?
+                        if [[ ! "$1" =~ ^-.* && "$1" != "" ]]; then
+                                _jobId="$1"
+                                _jobIdSet="0"
+                                shift 1
+                        else
+                                echo "E: missing option parameter for \"$_option\"!"
+                                exit 1
+                        fi
+
+                        echo "Sorry, function is not available yet!"
+                        #gsatctl/qwait "$_jobId"
+                        exit
+                else
+                        #  duplicate usage of this parameter
+                        echo "ERROR: The option \"$_option\" cannot be used multiple times!"
                         exit 1
                 fi
 
