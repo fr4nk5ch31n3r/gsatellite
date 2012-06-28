@@ -1,0 +1,57 @@
+ToDo:
+------
+
+gschedule.bashlib:
+
+* Implement general functions like schedule(), isRunableJob() that use the
+  configured scheduler
+
+sputnik.bash:
+
+* Add functionality for automatic job restart
+* Add cleanup function for trap
+* Check functionality
+
+gsatctl.bash:
+
+* change help message or implement described functionality
+
+Scheduling:
+
+* Directory locking for gschedule related functions                             [partly implemented]
+
+* Test scheduling functionality with simple "sleep X" jobs (both locally and    [ok]
+  over NFS)
+
+General:
+
+* Create NFS test environment (1 server, 2 clients)                             [ok]
+* Create manual pages for tools and perhaps also for libs                       [partly implemented]
+* Implement automatic start of gsatlc and signal forwarder
+
+* !IMPORTANT! After sending a message, the receivers message box must be touched! [ok]
+
+################################################################################
+
+WORKING:
+---------
+
+* gqsub
+* gqstat
+* gqdel
+* fifo scheduling
+* sputnik (running job, no automatic restart currently and no different job types)
+* gsatlc
+* sigfwd
+* general message passing works (incl. signal forwarding) but is not fast (e.g.:
+"
+hlr000fs@nfs-client1:~/tmp$ time gqsub $PWD/job1
+00000
+
+real	0m3.671s
+user	0m0.316s
+sys	0m0.760s
+"
+)
+
+If sender and receiver are on the same host, the needed time is cut by half.
