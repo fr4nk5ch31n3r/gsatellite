@@ -1,0 +1,74 @@
+GSATCTL(1)
+==========
+:doctype: manpage
+:Date: 07 June 2012
+:Revision: v0.1.0
+:man source: gsatctl
+:man version: {revision}
+:man manual: gSatellite Manual
+
+NAME
+----
+gsatctl - user interface to gsatellite
+
+
+SYNOPSIS
+--------
+*gsatctl [OPTIONS]*
+
+
+DESCRIPTION
+-----------
+gsatctl(1) - the gsatellite controller - is the user interface to gsatellite. It
+allows for job submission and manipulation. It can also show information about
+all gsatellite jobs.
+
+
+OPTIONS
+-------
+*-s, --qsub* 'JOBFILE'::
+    Submit a job to gsatellite.
+
+*-h, --qhold* 'JOBID'::
+    Hold a job identified by its 'JOBID'.
+
+*-r, --qrls* 'JOBID'::
+    Release a hold from a job identified by its 'JOBID'.
+
+*-d, --qdel*  'JOBID'::
+    Remove a job identified by its 'JOBID' from gsatellite. This only works for
+    jobs that are not already in the running state.
+
+*-l, --qstat* '[JOBSTATE]'::
+    List all jobs which are in the state 'JOBSTATE', or if 'JOBSTATE' is not
+    provided, list all jobs.
+
+*-w, --qwait* 'JOBID'::
+    Wait for the job specified by its 'JOBID' to exit and return its exit value.
+
+*[--help]*::
+    Display the help message and exit.
+
+*[-V, --version]*::
+    Display version information and exit.
+
+
+SHORTHANDS
+----------
+gqsub jobFile
+
+qghold jobId
+
+gqrls jobId
+
+gqdel jobId
+
+gqstat [jobState]
+
+gqwait jobId
+
+
+Author
+------
+Frank Scheiner <frank.scheiner@web.de>
+

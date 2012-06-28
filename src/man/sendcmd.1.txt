@@ -1,0 +1,62 @@
+SENDCMD(1)
+==========
+:doctype: manpage
+:Date: 07 June 2012
+:Revision: v0.1.0
+:man source: sendcmd
+:man version: {revision}
+:man manual: gSatellite Manual
+
+
+NAME
+----
+sendcmd - tool for message passing debugging
+
+
+SYNOPSIS
+--------
+*sendcmd [OPTIONS]*
+
+
+DESCRIPTION
+-----------
+sendcmd is a small tool for testing message passing functionality. It receives a
+possible answer via a temporary message box.
+
+
+OPTIONS
+-------
+*-c, --command* 'COMMAND'::
+    Specifiy the command to send. Commands depend on the specific receiver
+    process, but the standard commands are:
+
+    'ALIVE?'        Is the contacted process still alive?
+
+    'PID?'          Contacted process should return its PID.
+
+    'HOST?'         Contacted process should return the host it is running on.
+
+    'STOP'          Stop the contacted process.
+
+*-m, --message-box* 'MESSAGEBOX'::
+    Specify the message box to send the command to.
+
+*[--no-sigfwd]*::
+    Disable signal forwarding during send.
+
+*[--no-wait-for-answer]*::
+    Don't wait for an answer after sending a command.
+
+*[--debug]*::
+    Enable debug mode.
+
+*[--help]*::
+    Display the help message and exit.
+
+*[-V, --version]*::
+    Display version information and exit.
+
+Author
+------
+Frank Scheiner <frank.scheiner@web.de>
+
