@@ -329,7 +329,14 @@ ipc/file/sendMsg() {
                 echo "$_message" > "$_messageFileWithPath" && \
                 mv "$_messageFileWithPath" "$_messageBox"/${_messageFileName##.}
                 local _sendRetVal="$?"
-                touch -mc "$_messageBox"
+                #  It looks like this touch is not needed, as the renaming of the
+                #+ message at the end of a send should trigger ctime/mtime and perhaps 
+                #+ even atime updates for the message box directory.
+                #+ And as messageAvailable should only return 0, if a message is
+                #+ available we don't need to touch the message box to trigger xtime
+                #+ updates which itself trigger an update of the cached directory
+                #+ contents (<http://www.spinics.net/lists/linux-nfs/msg13055.html>).
+                #touch -mc "$_messageBox"
                 break
         done
 
@@ -359,7 +366,8 @@ ipc/file/receiveMsg() {
                 [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in receiveMsg() _messageBox=\"$_messageBox\" has alias" 1>&2
         fi
 
-        touch -c "$_messageBox" &>/dev/null
+        #  Same here (See the end of sendMsg() above)!
+        #touch -c "$_messageBox" &>/dev/null
 
         if [[ ! -e "$_messageBox" ]]; then
                 return 2
