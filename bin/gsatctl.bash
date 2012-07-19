@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#  gsatctl - gsatellite controller (user interface to gsatellite)
+#  gsatctl - gsatellite controller (user interface for gsatellite)
 
 :<<COPYRIGHT
 
@@ -375,8 +375,9 @@ gsatctl/qdel() {
         local _jobId="$1"
 
         #  Integrated second possible path which checks directly if a job is
-        #+ running without interacting with gsatlc. This saves some cycles.
-        if gschedule/isRunningJob "$_jobId"; then
+        #+ running or has a valid job id without interacting with gsatlc. This
+        #+ saves some cycles.
+        if ! gschedule/isValidJobId "$_jobId" || gschedule/isRunningJob "$_jobId"; then
                 #  retreat
                 echo "E: qdel failed!" 1>&2
                 return 1
