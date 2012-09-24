@@ -1,6 +1,13 @@
 ToDo:
 ------
 
+2012-09-24:
+* message box creation:
+"mktemp" evaluates the env var TEMPDIR when using "-p" on SLES10. Hence
+temp message boxes are created in the wrong locations. Using "unset TEMPDIR"
+in the "ipc/file.bashlib" solves this issue.
+
+
 gschedule.bashlib:
 
 * Implement general functions like schedule(), isRunableJob() that use the
