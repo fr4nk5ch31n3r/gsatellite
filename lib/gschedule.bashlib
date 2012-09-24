@@ -306,6 +306,8 @@ gschedule/holdJob() {
         #  usage:
         #+ gschedule/holdJob jobId
 
+	_DEBUG=1
+
         local _jobId="$1"
 
         if ! gschedule/isValidJobId "$_jobId"; then
@@ -324,8 +326,11 @@ gschedule/holdJob() {
 
         #  if job is running, 
         if gschedule/isRunningJob "$_jobId"; then
+        	echo "($$) DEBUG: Is running job!"
                 #  create temporary message box
                 local _tempMsgBox=$( ipc/file/createTempMsgBox )
+
+		echo "($$) DEBUG: holdJob() _tempMsgBox=\"$_tempMsgBox\""
 
                 #  get corresponding satellite (sputnik)
                 local _sputnikPid=$( cat "$_jobDir/sputnik.pid" )
@@ -340,12 +345,16 @@ gschedule/holdJob() {
                         return 1
                 fi
 
+		echo "($$) DEBUG: After sendMsg()!"
+
                 #  wake up sputnik
                 local _signal="SIGCONT"
 
                 #  wake sputnik with signal forwarding
                 ipc/file/sigfwd/forwardSignal "$_sputnikHostname" "$_sputnikPid" "$_signal" || \
                 (echo "E: ipc/file/sigfwd/forwardSignal() failed!" 1>&2 && return 1)
+
+		echo "($$) DEBUG: After forwardSignal()!"
 
                 #  receive acknowledgement
                 local _receivedMessage=""
