@@ -78,6 +78,8 @@ gsatlc/processMsg() {
                         ipc/file/sendMsg "$_answerBox" "OK;$_inbox"
                 elif [[ "$_funcRetVal" == "$_gschedule_errorInvalidJobId" ]]; then
                         ipc/file/sendMsg "$_answerBox" "qhold failed: invalid job id;$_inbox"
+		else
+			ipc/file/sendMsg "$_answerBox" "qhold failed;$_inbox"
                 fi
 
                 return
