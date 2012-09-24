@@ -64,9 +64,24 @@ sputnik/holdJob() {
         local _job="$1"
 
         local _jobTmpDir=$( dirname "$_job" )
+        
+        local _jobPid=$( cat "$_jobTmpDir/../job.pid" )
 
         local _jobType="default"
 
+	#local _holdSignal=$( sputnik/getHoldSignal "$_jobType" )
+	local _holdSignal="SIGINT"
+	
+	#  "hold" job
+	#  NOTICE: There's a "-" in front of the PID. This results in signalling
+	#+ the whole process group.
+        /bin/kill -"$_holdSignal" -"$_jobPid" &>/dev/null
+
+        if [[ "$?" == "0" ]]; then
+                return 0
+        else
+                return 1
+        fi
         
 }
 
@@ -169,12 +184,13 @@ processMsg() {
                         local _gsatlcMessage="HOLD FAILED;$_inbox"
                 fi
 
-                ipc/file/sendMsg "$_gsatlcMessageBox" "$_gsatlcMessage"
+                ipc/file/sendMsg "$_answerBox" "$_gsatlcMessage"
                 
-                local _signal="SIGCONT"
+                #  No wakeup needed, gsatlc is actively waiting for this answer
+                #local _signal="SIGCONT"
 
                 #  wake gsatlc with signal forwarding
-                ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal"
+                #ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal"
 
                 if [[ "$?" == "0" ]]; then
                         return 0
