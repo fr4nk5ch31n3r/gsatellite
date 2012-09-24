@@ -3,11 +3,12 @@
 #  install.sh / uninstall.sh - Install or uninstall software
 
 _prefixDir="$HOME/opt"
+#  Provider of the software, e.g. project name or similar
 _provider=""
 _product="gsatellite"
 
 # user install activated? 0 => no, 1 => yes
-_uIserInstall=1
+_userInstall=1
 
 #  if a (prefix) directory is provided, switch to system install
 if [[ "$1" != "" ]]; then
@@ -20,39 +21,29 @@ if [[ "$(basename $0)" == "install.sh" ]]; then
 
 	#  first create bin dir in home, if not already existing (only for user
         #+ install!)
-	if [[ $_userInstall -eq 1 ]]; then	
+	if [[ $_userInstall -eq 1 ]]; then
 		if [[ ! -e "$HOME/bin" ]]; then
 			mkdir -p "$HOME/bin" &>/dev/null
 		fi
 	fi
 
-	#  create directory structure
-	mkdir -p "$_prefixDir/$_provider/$_product/bin" &>/dev/null
-	mkdir -p "$_prefixDir/$_provider/$_product/lib" &>/dev/null
-	mkdir -p "$_prefixDir/$_provider/$_product/share/doc" &>/dev/null
-	mkdir -p "$_prefixDir/$_provider/$_product/share/man/man1" &>/dev/null
+	#  create base directory
+	mkdir -p "$_prefixDir/$_provider/$_product" &>/dev/null
 
 	#  create directory for configuration files and also copy configuration
 	#+ files
 	if [[ $_userInstall -eq 1 ]]; then
-		mkdir -p "$HOME/.$_product/etc" &>/dev/null
-		cp ./etc/paths.conf "$HOME/.$_product/etc"
-	else	
-		mkdir -p "$_prefixDir/$_provider/$_product/etc" &>/dev/null
-		cp ./etc/paths.conf "$_prefixDir/$_provider/$_product/etc"
+		mkdir -p "$HOME/.$_product" &>/dev/null
+		cp ./etc/paths.conf.example "$HOME/.$_product/paths.conf"
+	else		
+		cp ./etc/paths.conf.example "$_prefixDir/$_provider/$_product/etc/paths.conf"
 	fi
 
-	#  copy scripts and...
-	cp ./bin/gsatctl.bash \
-           ./bin/gsatlc.bash \
-           ./bin/gsatlcd.bash \
-           ./bin/sendcmd.bash \
-           ./bin/sigfwd.bash \
-           ./bin/sputnik.bash \
-           ./bin/sputnikd.bash \
-           "$_prefixDir/$_provider/$_product/bin"
+	#  copy scripts and libs
+	cp -rd ./bin "$_prefixDir/$_provider/$_product/"
+	cp -rd ./lib "$_prefixDir/$_provider/$_product/"
 
-        #  reconfigure paths inside of the scripts
+        #  reconfigure paths inside of the scripts and configurations files
         #        + reconfigure path to configuration files
         #        |
         #        |                                                             + remove (special) comments
@@ -62,44 +53,41 @@ if [[ "$(basename $0)" == "install.sh" ]]; then
         sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -e 's/#sed#//g' -i "$_prefixDir/$_provider/$_product/bin/sendcmd.bash"
         sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -e 's/#sed#//g' -i "$_prefixDir/$_provider/$_product/bin/sigfwd.bash"
         sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -e 's/#sed#//g' -i "$_prefixDir/$_provider/$_product/bin/sputnik.bash"
-
-
-	#  ...make links...
+        
 	if [[ $_userInstall -eq 1 ]]; then
-		linkPath="$HOME"
-	else
-		linkPath="$_prefixDir/$_provider/$_product"
+        	sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -i "$HOME/.$_product/paths.conf"
+        else
+        	sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -i "$_prefixDir/$_provider/$_product/etc/paths.conf"
 	fi
 
-	ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gsatctl" \
-                                                                  "$linkPath/bin/gqstat" \
-                                                                  "$linkPath/bin/gqsub" \
-                                                                  "$linkPath/bin/gqhold" \
-                                                                  "$linkPath/bin/gqrls" \
-                                                                  "$linkPath/bin/gdel"
+	#  if this is a user install create links in "$HOME/bin"
+	if [[ $_userInstall -eq 1 ]]; then
+		linkPath="$HOME"
+		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gsatctl"
+		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gqstat"
+		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gqsub"
+		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gqhold"
+		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gqrls"
+		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gqdel"
 
-	ln -s "$_prefixDir/$_provider/$_product/bin/sendcmd.bash" "$linkPath/bin/sendcmd"
+		ln -s "$_prefixDir/$_provider/$_product/bin/sendcmd.bash" "$linkPath/bin/sendcmd"
 
-	ln -s "$_prefixDir/$_provider/$_product/bin/gsatlc.bash" "$linkPath/bin/gsatlc"
-	ln -s "$_prefixDir/$_provider/$_product/bin/gsatlcd.bash" "$linkPath/bin/gsatlcd"
-	ln -s "$_prefixDir/$_provider/$_product/bin/sigfwd.bash" "$linkPath/bin/sigfwd"
-	ln -s "$_prefixDir/$_provider/$_product/bin/sigfwdd.bash" "$linkPath/bin/sigfwdd"
-     	ln -s "$_prefixDir/$_provider/$_product/bin/sputnik.bash" "$linkPath/bin/sputnik"
-	ln -s "$_prefixDir/$_provider/$_product/bin/sputnikd.bash" "$linkPath/bin/sputnikd"
+		ln -s "$_prefixDir/$_provider/$_product/bin/gsatlc.bash" "$linkPath/bin/gsatlc"
+		ln -s "$_prefixDir/$_provider/$_product/bin/gsatlcd.bash" "$linkPath/bin/gsatlcd"
+		ln -s "$_prefixDir/$_provider/$_product/bin/sigfwd.bash" "$linkPath/bin/sigfwd"
+		ln -s "$_prefixDir/$_provider/$_product/bin/sigfwdd.bash" "$linkPath/bin/sigfwdd"
+	     	ln -s "$_prefixDir/$_provider/$_product/bin/sputnik.bash" "$linkPath/bin/sputnik"
+		ln -s "$_prefixDir/$_provider/$_product/bin/sputnikd.bash" "$linkPath/bin/sputnikd"
+	fi
 
 	#  copy README and manpages
-	cp ./README "$_prefixDir/$_provider/$_product/share/doc"
-	#cp ./gtransfer.1.pdf ./dpath.1.pdf ./dparam.1.pdf "$_prefixDir/gtransfer/share/doc"
-	cp ./COPYING "$_prefixDir/$_provider/$_product/share/doc"
-
-	cp ./gsatctl.1 "$_prefixDir/$_provider/$_product/share/man/man1"
-	cp ./sendcmd.1 "$_prefixDir/$_provider/$_product/share/man/man1"
-
+	cp -r ./share "$_prefixDir/$_provider/$_product/"
+	
 #  uninstallation
 elif [[ "$(basename $0)" == "uninstall.sh" ]]; then
 
 	#  remove a system installed gtransfer
-	if [[ "$1" != "" ]]; then
+	if [[ ! $_userInstall -eq 1 ]]; then
 		rm -rf "$_prefixDir/$_provider/$_product"
                 rmdir --ignore-fail-on-non-empty "$_prefixDir/$_provider"
 	#  remove a user installed gtransfer
