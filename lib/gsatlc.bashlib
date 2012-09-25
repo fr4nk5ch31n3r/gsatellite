@@ -71,11 +71,20 @@ gsatlc/processMsg() {
                 #  _command is "QHOLD <JOB_ID>"
                 local _jobId=${_command##QHOLD }
 
+		if gschedule/isRunningJob "$_jobId"; then 
+			local _runningJob=1
+		else
+			local _runningJob=0
+		fi
+
                 gsatlc/qhold "$_jobId"
                 local _funcRetVal="$?"
 
                 if [[ "$_funcRetVal" == "0" ]]; then
                         ipc/file/sendMsg "$_answerBox" "OK;$_inbox"
+                        if [[ $_runningJob -eq 1 ]]; then
+                        	gsatlc/schedule
+                        fi
                 elif [[ "$_funcRetVal" == "$_gschedule_errorInvalidJobId" ]]; then
                         ipc/file/sendMsg "$_answerBox" "qhold failed: invalid job id;$_inbox"
 		else
