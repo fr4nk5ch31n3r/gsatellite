@@ -190,13 +190,7 @@ gschedule/startJob() {
 
         local _job=$( readlink "$_gscheduleBaseDir/running/$_jobId.d/$_jobId" )
 
-        sputnikd "$_job" "$_jobDir" "$_jobId"
-
-        #local _gsatellitePid="$!"
-
-        #local _gsatellitePid="2"
-
-        #echo "$_gsatellitePid"
+        nohup sputnikd "$_job" "$_jobDir" "$_jobId" &
 
         return 0
 }
@@ -381,11 +375,20 @@ gschedule/holdJob() {
 
                 if [[ "$_receivedCommand" == "OK" ]]; then
                         ipc/file/removeMsgBox "$_tempMsgBox"
-                        ipc/unlock "$_jobDir"
+                        
+                        rm "$_gscheduleBaseDir/$( gschedule/getJobState $_jobId )/$_jobId.d"
+
+        		ln -s "$_jobDir" "$_gscheduleHeldDir/$_jobId.d" && \
+        		echo "held" > "$_gscheduleJobsDir/$_jobId.d/state"
+
+			ipc/unlock "$_jobDir"
+                        
                         return 0
                 else
                         ipc/file/removeMsgBox "$_tempMsgBox"
+                        
                         ipc/unlock "$_jobDir"
+                        
                         return 1
                 fi
         fi
