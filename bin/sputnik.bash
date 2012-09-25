@@ -55,6 +55,12 @@ _gscheduleBaseDir="$_gsatBaseDir/gschedule"
  
 ################################################################################
 
+_interrupted=0
+
+#  ignore SIGINT and SIGTERM
+trap 'echo "($$) DEBUG: SIGINT received." >&1' SIGINT
+trap 'echo "($$) DEBUG: SIGTERM received." >&1' SIGTERM
+
 sputnik/holdJob() {
         #  Put a hold on a job
         #
@@ -74,8 +80,11 @@ sputnik/holdJob() {
 	
 	#  "hold" job
 	#  NOTICE: There's a "-" in front of the PID. This results in signalling
-	#+ the whole process group.
-        /bin/kill -"$_holdSignal" -"$_jobPid" &>/dev/null
+	#+ the whole process group of sputnik. All sputnik processes should
+	#+ ignore SIGINT, but the children of the job child should react on
+	#+ this.
+	echo /bin/kill -"$_holdSignal" -"$$" >&2 #&>/dev/null
+        /bin/kill -"$_holdSignal" -"$$" #&>/dev/null
 
         if [[ "$?" == "0" ]]; then
                 return 0
@@ -98,10 +107,12 @@ sputnik/runJob() {
         #  _jobDir is "[...]/jobs/<JOB_ID>/jobtmp" 
         local _jobTmpDir=$( dirname "$_job" )
 
+	chmod +x "$_job"
+
         #  run job in the background to get its PID. We need its PID to be able
         #+ to interact with it with signals later.
         cd "$_jobTmpDir" && \
-        bash $_job 1>"$_jobTmpDir/../stdout" 2>"$_jobTmpDir/../stderr" &
+	$_job 1>"$_jobDir/stdout" 2>"$_jobDir/stderr" &
 
         local _jobPid="$!"
 
@@ -112,6 +123,9 @@ sputnik/runJob() {
         wait "$_jobPid"
 
         local _jobExitValue="$?"
+
+	#  save job's exit value
+	echo "$_jobExitValue" > "$_jobDir/job.exit"
 
         #  no answer from the parent needed, hence no inbox provided
         local _message="TERMINATED $_jobExitValue;"
@@ -151,23 +165,31 @@ processMsg() {
                 return
 
         elif [[ "$_command" =~ ^TERMINATED.* ]]; then
-                #  command is "TERMINATED <EXIT_VALUE>"
-                local _jobExitValue=$( echo "$_command" | cut -d ' ' -f 2 )
-
-                local _gsatlcMessage="TERMINATED $_jobId $_jobExitValue;$_inbox"
-
-                ipc/file/sendMsg "$_gsatlcMessageBox" "$_gsatlcMessage"
+                if [[ $_jobHeld -eq 0 ]]; then
                 
-                local _signal="SIGCONT"
+                	#  command is "TERMINATED <EXIT_VALUE>"
+                	local _jobExitValue=$( echo "$_command" | cut -d ' ' -f 2 )
 
-                #  wake gsatlc with signal forwarding
-                ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal"
+		        local _gsatlcMessage="TERMINATED $_jobId $_jobExitValue;$_inbox"
 
-                if [[ "$?" == "0" ]]; then
-                        exit 0
-                else
-                        exit 1
-                fi
+		        ipc/file/sendMsg "$_gsatlcMessageBox" "$_gsatlcMessage"
+		        
+		        local _signal="SIGCONT"
+
+		        #  wake gsatlc with signal forwarding
+		        ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal"
+
+			local _returnValue="$?"
+
+		        if [[ $_returnValue -eq 0 ]]; then
+		                exit 0
+			else
+		                exit 1
+		        fi
+		fi
+		
+		exit
+		
 
         elif [[ "$_command" =~ ^HOLD$ ]]; then
                 #  command is "HOLD"
@@ -180,6 +202,7 @@ processMsg() {
 
                 if [[ "$?" == "0" ]]; then
                         local _gsatlcMessage="OK;$_inbox"
+                        _jobHeld=1
                 else
                         local _gsatlcMessage="HOLD FAILED;$_inbox"
                 fi
@@ -212,6 +235,8 @@ processMsg() {
 _job="$1"
 _jobDir="$2"
 _jobId="$3"
+
+_jobHeld=0
 
 #if [[ ! -e "$_job" ]]; then
 #	exit 1
