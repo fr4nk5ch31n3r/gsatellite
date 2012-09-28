@@ -81,9 +81,6 @@ gschedule/nobatch/schedule() {
                         gschedule/startJob "$_jobId"
 
                         if [[ "$?" == "0" ]]; then
-                                #echo "$_sputnikPid" > "$_gscheduleBaseDir/running/$_jobId.d/sputnik.pid"
-                                echo "running" > "$_gscheduleBaseDir/jobs/$_jobId.d/state"
-
                                 echo "$_jobId"
                                 return 0
                         else
@@ -93,7 +90,7 @@ gschedule/nobatch/schedule() {
                 else
                         gschedule/queueJob "$_job" "$_jobId"
                         if [[ "$?" == "0" ]]; then
-                                echo "queued" > "$_gscheduleBaseDir/jobs/$_jobId.d/state"
+                                #echo "queued" > "$_gscheduleBaseDir/jobs/$_jobId.d/state"
 
                                 echo "$_jobId"
                                 return 0

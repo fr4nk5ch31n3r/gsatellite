@@ -155,11 +155,9 @@ gschedule/prepareJob() {
         local _jobDir="$_gscheduleBaseDir/jobs/$_jobId.d"
         mkdir "$_jobDir"
 
-        #  place a host identifier there
-        echo "$( hostname --fqdn )" > "$_jobDir/host"
         echo "$_jobId" > "$_jobDir/jobId"
 
-        #  place a copy of the job in the "jobs" dir in "jobtmp"
+        #  place a copy of the job in "jobtmp" in the "jobs" dir
         mkdir "$_jobDir/jobtmp"
         cp "$_job" "$_jobDir/jobtmp"
         ln -s "$_jobDir/jobtmp/$( basename $_job )" "$_jobDir/$_jobId"
@@ -191,6 +189,11 @@ gschedule/startJob() {
         local _job=$( readlink "$_gscheduleBaseDir/running/$_jobId.d/$_jobId" )
 
         nohup sputnikd "$_job" "$_jobDir" "$_jobId" &
+
+	echo "running" > "$_jobDir/state"
+
+        #  place a host identifier there
+        echo "$( hostname --fqdn )" > "$_jobDir/host"
 
         return 0
 }
@@ -251,7 +254,7 @@ gschedule/queueJob() {
 
         #  TODO:
         #  Clarify if this should be done by the plugin scheduler or this function.
-        #echo "queued" > "$_gscheduleQueuedDir/$_jobId.d/state"
+        echo "queued" > "$_gscheduleQueuedDir/$_jobId.d/state"
 
         #  unlock queued dir
 
