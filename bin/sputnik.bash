@@ -55,8 +55,6 @@ _gscheduleBaseDir="$_gsatBaseDir/gschedule"
  
 ################################################################################
 
-_interrupted=0
-
 #  ignore SIGINT and SIGTERM
 trap 'echo "($$) DEBUG: SIGINT received." >&1' SIGINT
 trap 'echo "($$) DEBUG: SIGTERM received." >&1' SIGTERM
@@ -73,7 +71,9 @@ sputnik/holdJob() {
         
         local _jobPid=$( cat "$_jobTmpDir/../job.pid" )
 
-        local _jobType="default"
+	#  this information is retrieved and stored in the job's directory by
+	#+ the scheduler (gsatlc)
+        local _jobType=$( cat "$_jobTmpDir/../job.type" )
 
 	#local _holdSignal=$( sputnik/getHoldSignal "$_jobType" )
 	local _holdSignal="SIGINT"
@@ -112,7 +112,7 @@ sputnik/runJob() {
         #  run job in the background to get its PID. We need its PID to be able
         #+ to interact with it with signals later.
         cd "$_jobTmpDir" && \
-	$_job 1>"$_jobDir/stdout" 2>"$_jobDir/stderr" &
+	$_job 1>"$_jobDir/job.stdout" 2>"$_jobDir/job.stderr" &
 
         local _jobPid="$!"
 
