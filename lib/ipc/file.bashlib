@@ -22,13 +22,26 @@ The program is distributed under the terms of the GNU General Public License
 
 COPYRIGHT
 
+################################################################################
+#  INCLUDES
+################################################################################
+
 :<<INCLUDE
-../ipc.bashlib
 INCLUDE
 
+
+################################################################################
+#  VARIABLES
+################################################################################
+
+readonly _ipc_file_version="0.1.0"
+
+
+################################################################################
+#  FUNCTIONS
+################################################################################
+
 :<<FUNCTIONS
-ipc/file/sendMsg
-ipc/file/receiveMsg
 ipc/file/getHostNameForMsgBox
 ipc/file/getPidForMsgBox
 ipc/file/getLocalMsgBoxByName
@@ -38,12 +51,10 @@ ipc/file/createMsgBox
 ipc/file/removeLocalMsgBoxByName
 ipc/file/removeMsgBox
 ipc/file/isAliasMsgBox
+ipc/file/sendMsg
+ipc/file/receiveMsg
+ipc/file/messageAvailable
 FUNCTIONS
-
-#  TODO:
-#  Only source a "parent" lib if it's not already loaded by a sister/brother
-#+ lib.
-. "$_LIB"/ipc.bashlib
 
 ipc/file/getHostNameForMsgBox() {
         #  get the FQDN for the specified message box
@@ -76,6 +87,7 @@ ipc/file/getHostNameForMsgBox() {
         return $(( $_tmpRetVal1 && $_tmpRetVal2 ))
 }
 
+
 ipc/file/getPidForMsgBox() {
         #  get the PID for the specified message box
         #
@@ -103,6 +115,7 @@ ipc/file/getPidForMsgBox() {
         fi
 }
 
+
 ipc/file/getLocalMsgBoxByName() {
         #  get a local message box by its name
         #
@@ -123,19 +136,6 @@ ipc/file/getLocalMsgBoxByName() {
         fi
 }
 
-#ipc/file/createAliasForMsgBox() {
-#    local _messageBox="$1"
-#    local _aliasName="$2"
-#
-#    local _messageBoxPath="$_MBOXES/$_hostName"
-#
-#    if [[ ! -e "$_messageBoxPath/$_messageBoxName" ]]; then
-#        return 1
-#    else
-#        ln -s "$_messageBox" "$_messageBoxPath/$_aliasName" &>/dev/null
-#        return
-#    fi
-#}
 
 ipc/file/createAliasMsgBox() {
         #  create an alias message box (to allow addressing of specific message
@@ -159,6 +159,7 @@ ipc/file/createAliasMsgBox() {
 
         return "$_retVal"
 }
+
 
 ipc/file/createTempMsgBox() {
         #  create temporary message box. Temporary message boxes don't have a
@@ -189,6 +190,7 @@ ipc/file/createTempMsgBox() {
 
         return "$_retVal"    
 }
+
 
 ipc/file/createMsgBox() {
         #  create a message box
@@ -222,6 +224,7 @@ ipc/file/createMsgBox() {
         return "$_retVal"
 }
 
+
 ipc/file/removeLocalMsgBoxByName() {
         #  remove the local message box with the specified name
         #
@@ -236,6 +239,7 @@ ipc/file/removeLocalMsgBoxByName() {
 
         return "$_retVal"
 }
+
 
 ipc/file/removeMsgBox() {
         #  remove the specified message box
@@ -253,6 +257,7 @@ ipc/file/removeMsgBox() {
         return "$_retVal"
 }
 
+
 ipc/file/isAliasMsgBox() {
         #  is the specified message box an alias for another message box?
         #
@@ -267,6 +272,7 @@ ipc/file/isAliasMsgBox() {
                 return 1
         fi
 }
+
 
 ipc/file/sendMsg() {
         #  send message to the message box of a process
@@ -347,6 +353,7 @@ ipc/file/sendMsg() {
 #  TODO:
 #+ Define error codes!
 
+
 ipc/file/receiveMsg() {
         #  receive a message from a message box
         #
@@ -413,6 +420,7 @@ ipc/file/receiveMsg() {
         fi
 
 }
+
 
 ipc/file/messageAvailable() {
         #  check if a message is available in the specified message box
