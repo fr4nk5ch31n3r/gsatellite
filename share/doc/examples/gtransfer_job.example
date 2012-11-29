@@ -1,0 +1,17 @@
+#!/bin/bash
+#  job type
+#GSAT -T gtransfer
+#  file name for stdout
+#GSAT -o stdout
+#  file name for stderr
+#GSAT -e stderr
+#  send mail?
+#GSAT -m n
+#  mail to whom
+#GSAT -M user@host.domain
+
+#  load needed modules
+module load [...]
+
+gt [...]
+
