@@ -26,9 +26,13 @@ The program is distributed under the terms of the GNU General Public License
 
 COPYRIGHT
 
+################################################################################
+#  CONFIGURATION
+################################################################################
+
 umask 0077
 
-_DEBUG="1"
+_DEBUG="0"
 
 _gsatBaseDir=$HOME/.gsatellite
 
@@ -46,6 +50,11 @@ fi
 #  include path config
 . "$_pathsConfigurationFile"
 
+
+################################################################################
+#  INCLUDES
+################################################################################
+
 #. $_LIB/ipc.bashlib
 #. $_LIB/ipc/file.bashlib
 . "$_LIB"/ipc/file/sigfwd.bashlib
@@ -53,71 +62,86 @@ fi
 . "$_LIB"/utils.bashlib
 
 
-processMsg() {
-    local _message="$1"
-    local _inbox="$2"
+################################################################################
+#  FUNCTIONS
+################################################################################
 
-    local _command=""
-    local _answerBox=""
+processMsg()
+{
+	local _message="$1"
+	local _inbox="$2"
 
-    _command=$( echo "$_message" | cut -d ';' -f 1 )
-    _answerBox=$( echo "$_message" | cut -d ';' -f 2 )
+	local _command=""
+	local _answerBox=""
 
-    [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in processMsg() _command=\"$_command\", _answerBox=\"$_answerBox\"" 1>&2
+	_command=$( echo "$_message" | cut -d ';' -f 1 )
+	_answerBox=$( echo "$_message" | cut -d ';' -f 2 )
 
-    #  garbage in inbox?
-    #if [[ "$_command" == "" && "$_answerBox" == "" ]]; then
-    #    return 1
-    #fi
+	[[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in processMsg() _command=\"$_command\", _answerBox=\"$_answerBox\"" 1>&2
 
-    #  special functionality
-    if [[ "$_command" =~ ^SIG.* ]]; then
-        #  Determine signal and PID from command
-        _signal=$( echo "$_command" | cut -d ' ' -f 1 )
-        _pid=$( echo "$_command" | cut -d ' ' -f 2 )
+	#  special functionality
+	if [[ "$_command" =~ ^SIG.* ]]; then
+		#  Determine signal and PID from command
+		_signal=$( echo "$_command" | cut -d ' ' -f 1 )
+		_pid=$( echo "$_command" | cut -d ' ' -f 2 )
 
-        #  Forward signal to "local" process
-        [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in processMsg(SIG*) before \"/bin/kill -"$_signal" "$_pid" &>/dev/null\"." 1>&2
-        /bin/kill -"$_signal" "$_pid" &>/dev/null
-        _killRetVal="$?"
+		#  Forward signal to "local" process
+		[[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in processMsg(SIG*) before \"/bin/kill -"$_signal" "$_pid" &>/dev/null\"." 1>&2
+		/bin/kill -"$_signal" "$_pid" &>/dev/null
+		_killRetVal="$?"
 
-        [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in processMsg(SIG*) before sendMsg()." 1>&2
-        ipc/file/sendMsg "$_answerBox" "$_killRetVal;$_inbox"
+		[[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in processMsg(SIG*) before sendMsg()." 1>&2
+		ipc/file/sendMsg "$_answerBox" "$_killRetVal;$_inbox"
 
-        [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in processMsg(SIG*) after sendMsg(\"$_killRetVal;$_inbox\")." 1>&2
+		[[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in processMsg(SIG*) after sendMsg(\"$_killRetVal;$_inbox\")." 1>&2
 
-        return
-    fi
+	else
+		#  standard functionality for message processing
+		ipc/file/msgproc/processMsg "$_message" "$_inbox"
+	fi
 
-    #  standard functionality for message processing
-    ipc/file/msgproc/processMsg "$_message" "$_inbox"
-
-    return
+	return
 
 }
 
+
+#  onExit() - perform cleanup on exit.
+sigfwd/onExit()
+{
+	#  remove all message boxes
+	ipc/file/removeMsgBox "$_inbox"
+	ipc/file/removeMsgBox "$_aliasInbox"
+
+	rm -f "$_selfPidFile"
+
+	return
+}
+
+################################################################################
+#  MAIN
 ################################################################################
 
-trap 'ipc/file/removeMsgBox "$_inbox" && ipc/file/removeMsgBox "$_aliasInbox"' EXIT
+trap 'sigfwd/onExit' EXIT
 
 _self="$$"
 _inboxName="$_self.inbox"
 
-#  create or truncate inbox
+#  create inbox
 _inbox=$( ipc/file/createMsgBox "$_inboxName" )
 
-#  create alias link
+#  create alias inbox
 _aliasInboxName="$_ipc_file_sigfwdInboxName"
-#ln -s "$( basename $_inbox )" "$( dirname $_inbox )/$_inboxAliasName"
-#_aliasInbox="$( dirname $_inbox )/$_inboxAliasName"
 _aliasInbox=$( ipc/file/createAliasMsgBox "$_inbox" "$_aliasInboxName" )
 
-#  save pid
+#  save PID
 _hostName=$( utils/getHostName )
 if [[ ! -e "$_gsatBaseDir/var/run/$_hostName" ]]; then
         mkdir -p "$_gsatBaseDir/var/run/$_hostName"
 fi
-echo $_self > "$_gsatBaseDir/var/run/$_hostName/sigfwdPid"
+
+_selfPidFile="$_gsatBaseDir/var/run/$_hostName/sigfwd.pid"
+
+echo $_self > "$_selfPidFile"
 
 ################################################################################
 
@@ -126,14 +150,15 @@ while [[ 1 ]]; do
         #  check real inbox for new messages, ...
         #  touch it first, so changes on other hosts are propagated
         #touch -c "$_inbox"
+        #  => this is not needed!
         if ipc/file/messageAvailable "$_inbox"; then
                 [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in main() before receiveMsg()." 1>&2
                 _message=$( ipc/file/receiveMsg "$_inbox" )
                 processMsg "$_message" "$_inbox"
         else
-                #  sigfwd mustn't stop itself, as otherwise it wouldn't be possible to
-                #+ wake it up from a remote host. Therefore if nothing to do it should
-                #+ sleep for some time.
+                #  sigfwd mustn't stop itself, as otherwise it wouldn't be
+                #+ possible to wake it up from a remote host. Therefore if
+                #+ nothing to do, it should sleep for some time.
                 sleep 0.5
         fi
 
