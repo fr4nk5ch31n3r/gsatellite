@@ -27,30 +27,71 @@ umask 0077
 
 _DEBUG="0"
 
-#  path to path configuration file (prefer system paths!)
-if [[ -e "/opt/gsatellite/etc/paths.conf" ]]; then
-        _pathsConfigurationFile="/opt/gsatellite/etc/paths.conf"
-#sed#elif [[ -e "<PATH_TO_GSATELLITE>/etc/paths.conf" ]]; then
-#sed#    _pathsConfigurationFile="<PATH_TO_GSATELLITE>/etc/paths.conf"
-elif [[ -e "/etc/opt/gsatellite/etc/paths.conf" ]]; then
-        _pathsConfigurationFile="/etc/opt/gsatellite/etc/paths.conf"
-elif [[ -e "$HOME/.gsatellite/paths.conf" ]]; then
-        _pathsConfigurationFile="$HOME/.gsatellite/paths.conf"
+_program=$( basename "$0" )
+
+################################################################################
+
+#  path to configuration files (prefer system paths!)
+#  For native OS packages:
+if [[ -e "/etc/gsatellite" ]]; then
+        _gsatConfigurationFilesPath="/etc/gsatellite"
+
+#  For installation with "install.sh".
+elif [[ -e "<PATH_TO_GSAT>/etc" ]]; then
+	_gsatConfigurationFilesPath="<PATH_TO_GSAT>/etc"
+
+#  According to FHS 2.3, configuration files for packages located in "/opt" have
+#+ to be placed here (if you use a provider super dir below "/opt" for the
+#+ gtransfer files, please also use the same provider super dir below
+#+ "/etc/opt").
+#elif [[ -e "/etc/opt/<PROVIDER>/gsatellite" ]]; then
+#	_gsatConfigurationFilesPath="/etc/opt/<PROVIDER>/gsatellite"
+elif [[ -e "/etc/opt/gsatellite" ]]; then
+        _gsatConfigurationFilesPath="/etc/opt/gsatellite"
+
+#  For user install in $HOME:
+elif [[ -e "$HOME/.gsatellite" ]]; then
+        _gsatConfigurationFilesPath="$HOME/.gsatellite"
 fi
 
-#  include path config
-. "$_pathsConfigurationFile"
+_gsatPathsConfigurationFile="$_gsatConfigurationFilesPath/paths.conf"
+
+#  include path config or fail with EX_SOFTWARE = 70, internal software error
+#+ not related to OS
+if ! . "$_gsatPathsConfigurationFile"; then
+	echo "($_program) E: Paths configuration file couldn't be read or is corrupted." 1>&2
+	exit 70
+fi
+
+################################################################################
 
 #  include needed libaries
 #. "$_LIB"/ipc.bashlib
 #. "$_LIB"/ipc/file.bashlib
-. "$_LIB"/ipc/file/sigfwd.bashlib
 
-. "$_LIB"/utils.bashlib
+_neededLibraries=(
 
-. "$_LIB"/gsatlc.bashlib
+"ipc/file/sigfwd.bashlib"
+"utils.bashlib"
+"gsatlc.bashlib"
 
-. "$_LIB"/gschedule.bashlib
+)
+
+for _library in ${_neededLibraries[@]}; do
+
+	if ! . "$_LIB"/"$_library"; then
+		echo "($_program) E: Library \""$_LIB"/"$_library"\" couldn't be read or is corrupted." 1>&2
+		exit 70
+	fi
+done
+
+#. "$_LIB"/ipc/file/sigfwd.bashlib
+
+#. "$_LIB"/utils.bashlib
+
+#. "$_LIB"/gsatlc.bashlib
+
+#. "$_LIB"/gschedule.bashlib
 
 ################################################################################
 
@@ -70,7 +111,6 @@ usage: gsatctl [--help]
        gsatctl --qrls jobId
        gsatctl --qdel jobId
        gsatctl --qstat [jobState]
-       gsatctl --qwait jobId
 
 --help gives more information
 
@@ -270,7 +310,7 @@ gsatctl/qhold() {
                         _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
 
                         if [[ $? -eq 0 ]]; then
-                                echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
+                                #echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
                                 break
                         fi
                 else
@@ -342,7 +382,7 @@ gsatctl/qrls() {
                                 _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
 
                                 if [[ $? -eq 0 ]]; then
-                                        echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
+                                        #echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
                                         break
                                 fi
                         else
@@ -415,7 +455,7 @@ gsatctl/qdel() {
                                 _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
 
                                 if [[ $? -eq 0 ]]; then
-                                        echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
+                                        #echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
                                         break
                                 fi
                         else
@@ -449,7 +489,7 @@ gsatctl/listJobsInState() {
         local _jobState="$1"
 
         #  right-bound text ouptut (default!)
-        printf "%12s\t%12s\t%12s\t%12s\n" "jobState" "jobId" "jobHost" "jobName"
+        printf "%12s\t%12s\t%12s\t%12s\n" "job.state" "job.id" "job.execHost" "job.name"
         echo -e "------------\t------------\t------------\t------------"
 
         for _jobDir in $( ls -1 "$_gscheduleBaseDir/$_jobState" ); do
@@ -458,7 +498,7 @@ gsatctl/listJobsInState() {
 
                 local _jobId=$( basename "$_gscheduleBaseDir/$_jobState/$_jobDir" )
                 _jobId=${_jobId%.d}
-                local _jobHost=$( cat "$_gscheduleBaseDir/jobs/$_jobDir/host" 2>/dev/null )
+                local _jobHost=$( cat "$_gscheduleBaseDir/jobs/$_jobDir/job.execHost" 2>/dev/null )
                 local _jobName=$( basename $( readlink "$_gscheduleBaseDir/$_jobState/$_jobDir/$_jobId" ) )
 
                 #  left-bound text output ("-"!)
@@ -483,7 +523,7 @@ gsatctl/listAllJobs() {
         #  perhaps locking needed before listing?
 
         #  right-bound text ouptut (default!)
-        printf "%12s\t%12s\t%12s\t%12s\n" "jobState" "jobId" "jobHost" "jobName"
+        printf "%12s\t%12s\t%12s\t%12s\n" "job.state" "job.id" "job.execHost" "job.name"
         echo -e "------------\t------------\t------------\t------------"
 
         for _jobDir in $( ls -1 "$_gscheduleBaseDir/jobs" ); do
@@ -492,8 +532,8 @@ gsatctl/listAllJobs() {
 
                 local _jobId=$( basename "$_gscheduleBaseDir/jobs/$_jobDir" )
                 _jobId=${_jobId%.d}
-                local _jobState=$( cat "$_gscheduleBaseDir/jobs/$_jobDir/state" 2>/dev/null )
-                local _jobHost=$( cat "$_gscheduleBaseDir/jobs/$_jobDir/host" 2>/dev/null )
+                local _jobState=$( cat "$_gscheduleBaseDir/jobs/$_jobDir/job.state" 2>/dev/null )
+                local _jobHost=$( cat "$_gscheduleBaseDir/jobs/$_jobDir/job.execHost" 2>/dev/null )
                 local _jobName=$( basename $( readlink "$_gscheduleBaseDir/jobs/$_jobDir/$_jobId" ) )
 
                 #  left-bound text output ("-"!)
