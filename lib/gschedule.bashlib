@@ -38,7 +38,7 @@ FUNCTIONS
 . "$_LIB"/utils.bashlib
 . "$_LIB"/ipc.bashlib
 
-_gscheduleVersion="0.0.1"
+readonly _gschedule_version="0.1.0"
 
 _gsatBaseDir=$HOME/.gsatellite
 _gscheduleBaseDir="$_gsatBaseDir/gschedule"
@@ -51,6 +51,11 @@ _gscheduleFailedDir="$_gscheduleBaseDir/failed"
 _gscheduleHeldDir="$_gscheduleBaseDir/held"
 _gscheduleQueuedDir="$_gscheduleBaseDir/queued"
 _gscheduleJobsDir="$_gscheduleBaseDir/jobs"
+
+#  TODO:
+#  Define static names
+readonly _gschedule_jobStateFileName="job.state"
+readonly _gschedule_jobEnvFileName="job.env"
 
 ################################################################################
 #  Defined exit codes
@@ -128,12 +133,12 @@ gschedule/handleTerminatedJob() {
         if [[ "$_jobExitValue" == "0" ]]; then
                 #  job finished successfully
                 ln -s "$_jobDir" "$_gscheduleFinishedDir/$_jobId.d" && \
-                echo "finished" > "$_gscheduleJobsDir/$_jobId.d/state"
+                echo "finished" > "$_gscheduleJobsDir/$_jobId.d/job.state"
 
         else
                 #  job failed
                 ln -s "$_jobDir" "$_gscheduleFailedDir/$_jobId.d" && \
-                echo "failed" > "$_gscheduleJobsDir/$_jobId.d/state"
+                echo "failed" > "$_gscheduleJobsDir/$_jobId.d/job.state"
 
         fi
 
@@ -141,6 +146,7 @@ gschedule/handleTerminatedJob() {
 
         return
 }
+
 
 gschedule/prepareJob() {
         #  prepare job for running
@@ -165,11 +171,12 @@ gschedule/prepareJob() {
         return
 }
 
+
 gschedule/startJob() {
         #  start job
         #
         #  usage:
-        #+ gschedule/runJob jobId
+        #+ gschedule/startJob jobId
 
         local _jobId="$1"
 
@@ -190,13 +197,14 @@ gschedule/startJob() {
 
         nohup sputnikd "$_job" "$_jobDir" "$_jobId" &
 
-	echo "running" > "$_jobDir/state"
+	echo "running" > "$_jobDir/job.state"
 
         #  place a host identifier there
-        echo "$( hostname --fqdn )" > "$_jobDir/host"
+        echo "$( hostname --fqdn )" > "$_jobDir/job.execHost"
 
         return 0
 }
+
 
 gschedule/getJobId() {
         #  get job id for job
@@ -219,6 +227,7 @@ gschedule/getJobId() {
         return
 }
 
+
 gschedule/anyRunningJob() {
         #  is there any job running
         #
@@ -235,6 +244,7 @@ gschedule/anyRunningJob() {
                 return 1
         fi
 }
+
 
 gschedule/queueJob() {
         #  queue the given job
@@ -254,12 +264,13 @@ gschedule/queueJob() {
 
         #  TODO:
         #  Clarify if this should be done by the plugin scheduler or this function.
-        echo "queued" > "$_gscheduleQueuedDir/$_jobId.d/state"
+        echo "queued" > "$_gscheduleQueuedDir/$_jobId.d/job.state"
 
         #  unlock queued dir
 
         return
 }
+
 
 gschedule/isRunningJob() {
         #  check if the job with the given job id is in running state
@@ -269,11 +280,11 @@ gschedule/isRunningJob() {
 
         local _jobId="$1"
 
-        if [[ ! -e "$_gscheduleJobsDir/$_jobId.d/state" ]]; then
+        if [[ ! -e "$_gscheduleJobsDir/$_jobId.d/job.state" ]]; then
                 return 1
         fi
 
-        local _jobState=$( cat "$_gscheduleJobsDir/$_jobId.d/state" )
+        local _jobState=$( cat "$_gscheduleJobsDir/$_jobId.d/job.state" )
 
         if [[ "$_jobState" == "running" ]]; then
                 return 0
@@ -281,6 +292,7 @@ gschedule/isRunningJob() {
                 return 1
         fi
 }
+
 
 gschedule/isValidJobId() {
         #  check if the given job id is valid
@@ -296,6 +308,7 @@ gschedule/isValidJobId() {
                 return 1
         fi
 }
+
 
 gschedule/holdJob() {
         #  hold the job with the given job id
@@ -331,7 +344,7 @@ gschedule/holdJob() {
 
                 #  get corresponding satellite (sputnik)
                 local _sputnikPid=$( cat "$_jobDir/sputnik.pid" )
-                local _sputnikHostname=$( cat "$_jobDir/host" )
+                local _sputnikHostname=$( cat "$_jobDir/job.execHost" )
                 local _sputnikMessageBox="$_MBOXES/$_sputnikHostname/$_sputnikPid.inbox"
 
                 local _message="HOLD;$_tempMsgBox"
@@ -382,7 +395,7 @@ gschedule/holdJob() {
                         rm "$_gscheduleBaseDir/$( gschedule/getJobState $_jobId )/$_jobId.d"
 
         		ln -s "$_jobDir" "$_gscheduleHeldDir/$_jobId.d" && \
-        		echo "held" > "$_gscheduleJobsDir/$_jobId.d/state"
+			echo "held" > "$_gscheduleJobsDir/$_jobId.d/job.state"
 
 			ipc/unlock "$_jobDir"
                         
@@ -400,7 +413,7 @@ gschedule/holdJob() {
         rm "$_gscheduleBaseDir/$( gschedule/getJobState $_jobId )/$_jobId.d"
 
         ln -s "$_jobDir" "$_gscheduleHeldDir/$_jobId.d" && \
-        echo "held" > "$_gscheduleJobsDir/$_jobId.d/state"
+        echo "held" > "$_gscheduleJobsDir/$_jobId.d/job.state"
 
         ipc/unlock "$_jobDir"
 
@@ -434,7 +447,7 @@ gschedule/releaseJob() {
         rm "$_gscheduleBaseDir/held/$_jobId.d"
 
         ln -s "$_jobDir" "$_gscheduleQueuedDir/$_jobId.d" && \
-        echo "queued" > "$_gscheduleJobsDir/$_jobId.d/state"
+        echo "queued" > "$_gscheduleJobsDir/$_jobId.d/job.state"
 
         ipc/unlock "$_jobDir"
 
@@ -459,7 +472,7 @@ gschedule/removeJob() {
         #+ and check for existence!
         local _jobDir="$_gscheduleBaseDir/jobs/$_jobId.d"
 
-        local _jobState=$( cat "$_jobDir/state" )
+        local _jobState=$( cat "$_jobDir/job.state" )
 
         #  try to lock job dir until locked
         while ! ipc/lock "$_jobDir"; do
@@ -485,6 +498,7 @@ gschedule/removeJob() {
         fi
 }
 
+
 gschedule/getJobState() {
         #  usage:
         #+ gschedule/getJobState jobId
@@ -500,12 +514,29 @@ gschedule/getJobState() {
         #+ and check for existence!
         local _jobDir="$_gscheduleBaseDir/jobs/$_jobId.d"
 
-        local _jobState=$( cat "$_jobDir/state" )
+        local _jobState=$( cat "$_jobDir/job.state" )
 
         echo "$_jobState"
 
         return
 }
+
+
+gschedule/getJobDir()
+{
+	local _jobId="$1"
+
+	if ! gschedule/isValidJobId "$_jobId"; then
+		return "$_gschedule_errorInvalidJobId"
+	fi
+
+	local _jobDir="${_gscheduleJobsDir}/${_jobId}.d"
+
+	echo "$_jobDir"
+
+	return
+}
+
 
 gschedule/getNextQueuedJob() {
         #  get the job id of the oldest job in the queued dir
@@ -513,9 +544,6 @@ gschedule/getNextQueuedJob() {
         #  usage:
         #+ gschedule/getNextQueuedJob
 
-        #  TODO:
-        #  Implementation
-        
         local _nextQueuedJobId=$( ls -1 "$_gscheduleQueuedDir" | head -1 | cut -d '.' -f 1 )
 
         if [[ "$_nextQueuedJobId" != "" ]]; then
@@ -524,5 +552,68 @@ gschedule/getNextQueuedJob() {
         else
                 return 1
         fi
+}
+
+
+gschedule/getNextQueuedJob2() {
+        #  get the job id of the oldest job in the queued dir (use job id as
+        #+ determinator (is this the correct word?) - i.e. the job with the next
+        #+ smallest job ID is returned.
+        #
+        #  usage:
+        #+ gschedule/getNextQueuedJob
+        
+        #  TODO:
+        #  implementation
+        local _nextQueuedJobId=$( ls -1 "$_gscheduleQueuedDir" | head -1 | cut -d '.' -f 1 )
+
+        if [[ "$_nextQueuedJobId" != "" ]]; then
+                echo "$_nextQueuedJobId"
+                return 0
+        else
+                return 1
+        fi
+}
+
+
+#  onEvent() - run system and user services on specific event
+#+ @event:        the event as string (e.g. QSUB)
+#+ @environment:  a sourceable file containing environment variables that are
+#+                exported before execution of services, like e.g.:
+#+
+#+                GSAT_JOBNAME:   user specified job name
+#+
+#+                GSAT_O_WORKDIR: job's work directory
+#+
+#+                GSAT_O_HOME:    home directory of submitting user
+#+
+#+                GSAT_O_LOGNAME: name of submitting user
+#+
+#+                GSAT_O_JOBID:   job id
+#+
+#+                GSAT_O_HOST:    host on which job is currently executing
+#+
+#+                GSAT_O_PATH:    path variable used to locate executables
+#+                                during job execution
+#+
+#+ service - A service is just a script that is executed by gsatlc if the
+#+ corresponding event is triggered.
+gschedule/onEvent()
+{
+        local _event="$1"
+
+        #  maybe also provide the return/exit value of the corresponding action
+        #+ or job
+        #local _returnValue="$2"
+
+	#  env vars provided by gsatlc
+        local _environment="$2"
+
+        #  call user or system provided scripts from service dir named after the triggered event
+        "$_GSAT_LIBEXECPATH"/run-services "$_event" "$_environment" "${_GSAT_LIBEXECPATH}/services/on${_event}" &
+
+        "$_GSAT_LIBEXECPATH"/run-services "$_event" "$_environment" "${HOME}/.gsatellite/services/on${_event}" &
+
+        return
 }
 
