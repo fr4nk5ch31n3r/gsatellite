@@ -52,6 +52,7 @@ _gscheduleBaseDir="$_gsatBaseDir/gschedule"
 . "$_LIB/ipc/file/sigfwd.bashlib"
 . "$_LIB/ipc/file/msgproc.bashlib"
 . "$_LIB/utils.bashlib"
+. "$_LIB/gschedule.bashlib"
  
 ################################################################################
 
@@ -73,7 +74,7 @@ sputnik/holdJob() {
 
 	#  this information is retrieved and stored in the job's directory by
 	#+ the scheduler (gsatlc)
-        local _jobType=$( cat "$_jobTmpDir/../job.type" )
+        #local _jobType=$( cat "$_jobTmpDir/../job.type" )
 
 	#local _holdSignal=$( sputnik/getHoldSignal "$_jobType" )
 	local _holdSignal="SIGINT"
@@ -104,7 +105,6 @@ sputnik/runJob() {
         local _parentPid="$2"
         local _parentInbox="$3"
 
-        #  _jobDir is "[...]/jobs/<JOB_ID>/jobtmp" 
         local _jobTmpDir=$( dirname "$_job" )
 
 	chmod +x "$_job"
@@ -118,6 +118,31 @@ sputnik/runJob() {
 
         #  save job's PID
         echo "$_jobPid" > "$_jobDir/job.pid"
+
+	#  determine values for add. environment
+	local _jobId="$__GLOBAL__jobId"
+	local _jobDir=$( gschedule/getJobDir "$_jobId" )
+	local _jobName=$( basename "$_job" )
+	local _jobWorkDir="$_jobDir/jobtmp"
+	local _home="$HOME"
+	local _user="$USER"
+	local _execHost=$( utils/getHostName )
+	local _path="$PATH"
+
+        #  create additional environment
+	local _environmentFile="${_jobDir}/${_gschedule_jobEnvFileName}"
+
+	cat > "$_environmentFile" <<-EOF
+	export GSAT_JOBNAME="$_jobName"
+	export GSAT_O_WORKDIR="$_jobWorkDir"
+	export GSAT_O_HOME="$_home"
+	export GSAT_O_LOGNAME="$_user"
+	export GSAT_O_JOBID="$_jobId"
+	export GSAT_O_HOST="$_execHost"
+	export GSAT_O_PATH="$_path"
+	EOF
+
+	. "$_environmentFile"
 
         #  wait for the job to terminate
         wait "$_jobPid"
@@ -170,7 +195,7 @@ processMsg() {
                 	#  command is "TERMINATED <EXIT_VALUE>"
                 	local _jobExitValue=$( echo "$_command" | cut -d ' ' -f 2 )
 
-		        local _gsatlcMessage="TERMINATED $_jobId $_jobExitValue;$_inbox"
+		        local _gsatlcMessage="TERMINATED $__GLOBAL__jobId $_jobExitValue;$_inbox"
 
 		        ipc/file/sendMsg "$_gsatlcMessageBox" "$_gsatlcMessage"
 		        
@@ -233,8 +258,8 @@ processMsg() {
 
 #  a gsatellite job is a shell script
 _job="$1"
-_jobDir="$2"
-_jobId="$3"
+_jobDir="$2" #  e.g. "$_gscheduleJobsDir/$_jobId.d"
+__GLOBAL__jobId="$3"
 
 _jobHeld=0
 
