@@ -27,8 +27,37 @@ umask 0077
 
 _DEBUG="0"
 
-#  include path config
-. /opt/gsatellite/etc/path.conf
+#  path to configuration files (prefer system paths!)
+#  For native OS packages:
+if [[ -e "/etc/gsatellite" ]]; then
+        _gsatConfigurationFilesPath="/etc/gsatellite"
+
+#  For installation with "install.sh".
+#sed#elif [[ -e "<PATH_TO_GSATELLITE>/etc" ]]; then
+#sed#	_gsatConfigurationFilesPath="<PATH_TO_GSATELLITE>/etc"
+
+#  According to FHS 2.3, configuration files for packages located in "/opt" have
+#+ to be placed here (if you use a provider super dir below "/opt" for the
+#+ gtransfer files, please also use the same provider super dir below
+#+ "/etc/opt").
+#elif [[ -e "/etc/opt/<PROVIDER>/gsatellite" ]]; then
+#	_gsatConfigurationFilesPath="/etc/opt/<PROVIDER>/gsatellite"
+elif [[ -e "/etc/opt/gsatellite" ]]; then
+        _gsatConfigurationFilesPath="/etc/opt/gsatellite"
+
+#  For user install in $HOME:
+elif [[ -e "$HOME/.gsatellite" ]]; then
+        _gsatConfigurationFilesPath="$HOME/.gsatellite"
+fi
+
+_gsatPathsConfigurationFile="$_gsatConfigurationFilesPath/paths.conf"
+
+#  include path config or fail with EX_SOFTWARE = 70, internal software error
+#+ not related to OS
+if ! . "$_gsatPathsConfigurationFile"; then
+	echo "($_program) E: Paths configuration file couldn't be read or is corrupted." 1>&2
+	exit 70
+fi
 
 #. "$_LIB"/ipc.bashlib
 #. "$_LIB"/ipc/file.bashlib
