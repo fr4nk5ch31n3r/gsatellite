@@ -34,9 +34,9 @@ if [[ "$(basename $0)" == "install.sh" ]]; then
 	#+ files
 	if [[ $_userInstall -eq 1 ]]; then
 		mkdir -p "$HOME/.$_product" &>/dev/null
-		cp ./etc/paths.conf.example "$HOME/.$_product/paths.conf"
+		cp ./etc/paths.conf "$HOME/.$_product/paths.conf"
 	else		
-		cp ./etc/paths.conf.example "$_prefixDir/$_provider/$_product/etc/paths.conf"
+		cp ./etc/paths.conf "$_prefixDir/$_provider/$_product/etc/paths.conf"
 	fi
 
 	#  copy scripts and libs
