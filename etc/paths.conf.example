@@ -1,8 +1,0 @@
-#  paths.conf - config file for needed paths
-
-#  Libraries base directory
-_LIB="<PATH_TO_GSATELLITE>/lib"
-
-#  Message boxes are usually stored in the user's home directory
-_MBOXES="$HOME/.gsatellite/mboxes"
-
