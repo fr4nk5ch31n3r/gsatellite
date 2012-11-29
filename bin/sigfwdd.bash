@@ -16,7 +16,7 @@ if [[ "$1" == "--start" ]]; then
 
 elif [[ "$1" == "--stop" ]]; then
 
-        _sigfwdPid=$( cat $HOME/.gsatellite/var/run/$_hostName/sigfwdPid )
+        _sigfwdPid=$( cat $HOME/.gsatellite/var/run/$_hostName/sigfwd.pid )
 
         kill "$_sigfwdPid"
 
