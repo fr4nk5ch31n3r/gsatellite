@@ -1,0 +1,44 @@
+#!/bin/bash
+
+#  Available environment variables provided by gsatlc:
+#+
+#+ GSAT_JOBNAME:   user specified job name
+#+
+#+ GSAT_O_WORKDIR: job's work directory
+#+
+#+ GSAT_O_HOME:    home directory of submitting user
+#+
+#+ GSAT_O_LOGNAME: name of submitting user
+#+
+#+ GSAT_O_JOBID:   job id
+#+
+#+ GSAT_O_HOST:    host on which job is currently executing
+#+
+#+ GSAT_O_PATH:    path variable used to locate executables during job execution
+
+
+#  Available environment variables provided by run-services:
+#+
+#+ GSAT_EVENT:     the triggering event
+
+
+#  Available utility/helper functions provided by run-services:
+#+
+#+ __getEmailAddress():
+#+                 returns the user provided email address.
+
+#  Create mail body
+cat > /tmp/${GSAT_O_LOGNAME}_${GSAT_O_JOBID}.mailbody <<-EOF
+	Event: $GSAT_EVENT 
+	Job name: $GSAT_JOBNAME
+	Job id: $GSAT_O_JOBID
+	Executed on: $GSAT_O_HOST
+	Paths used: $GSAT_O_PATH
+EOF
+
+mail -s "[GSAT] $GSAT_O_JOBID => $GSAT_EVENT" $( __getEmailAddress ) < /tmp/${GSAT_O_LOGNAME}_${GSAT_O_JOBID}.mailbody
+
+rm -f /tmp/${GSAT_O_LOGNAME}_${GSAT_O_JOBID}.mailbody
+
+exit
+
