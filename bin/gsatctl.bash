@@ -37,8 +37,8 @@ if [[ -e "/etc/gsatellite" ]]; then
         _gsatConfigurationFilesPath="/etc/gsatellite"
 
 #  For installation with "install.sh".
-elif [[ -e "<PATH_TO_GSAT>/etc" ]]; then
-	_gsatConfigurationFilesPath="<PATH_TO_GSAT>/etc"
+#sed#elif [[ -e "<PATH_TO_GSATELLITE>/etc" ]]; then
+#sed#	_gsatConfigurationFilesPath="<PATH_TO_GSATELLITE>/etc"
 
 #  According to FHS 2.3, configuration files for packages located in "/opt" have
 #+ to be placed here (if you use a provider super dir below "/opt" for the
