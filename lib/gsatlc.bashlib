@@ -35,7 +35,9 @@ _scheduler="fifo"
 . "$_LIB"/ipc.bashlib
 . "$_LIB"/gschedule/$_scheduler.bashlib
 
-gsatlc/processMsg() {
+
+gsatlc/processMsg()
+{
         #  process a received message
         #
         #  usage:
@@ -50,7 +52,7 @@ gsatlc/processMsg() {
         _command=$( echo "$_message" | cut -d ';' -f 1 )
         _answerBox=$( echo "$_message" | cut -d ';' -f 2 )
 
-        #  event: qsub
+        #  event: JOB_SUBMISSION
         if [[ "$_command" =~ ^QSUB.* ]]; then
                 #  _command is "QSUB <JOB_WITH_FULL_PATH>"
                 local _job=${_command##QSUB }
@@ -127,11 +129,23 @@ gsatlc/processMsg() {
 
                 return
 
-        #  event: job terminated
+        #  event: JOB_TERMINATION
         elif [[ "$_command" =~ ^TERMINATED.* ]]; then
                 #  _command is "TERMINATED <JOB_ID> <EXIT_VALUE>"
                 local _jobId=$( echo "$_command" | cut -d ' ' -f 2 )
                 local _jobExitValue=$( echo "$_command" | cut -d ' ' -f 3 )
+
+		echo "($$) DEBUG: Before onEvent() $( date +%s)" 1>&2
+
+		echo "($$) DEBUG: _jobId=\"$_jobId\"" 1>&2
+
+		local _environment=$( gschedule/getJobDir "$_jobId" )"/${_gschedule_jobEnvFileName}"
+
+		echo "($$) DEBUG: _environment=\"$_environment\"" 1>&2
+
+		gschedule/onEvent "JOB_TERMINATION" "$_environment" &
+
+		echo "($$) DEBUG: After onEvent() $( date +%s)" 1>&2
 
                 #  check if job is/was in running state
                 if gschedule/isRunningJob "$_jobId"; then
@@ -154,7 +168,8 @@ gsatlc/processMsg() {
 }
 
 
-gsatlc/qsub() {
+gsatlc/qsub()
+{
         #  submit a job to gsatellite
         #
         #  usage:
@@ -173,7 +188,8 @@ gsatlc/qsub() {
 }
 
 
-gsatlc/qhold() {
+gsatlc/qhold()
+{
         #  hold a job
         #
         #  usage:
@@ -187,7 +203,8 @@ gsatlc/qhold() {
 }
 
 
-gsatlc/qrls() {
+gsatlc/qrls()
+{
         #  release a hold on a job
         #
         #  usage:
@@ -202,7 +219,8 @@ gsatlc/qrls() {
 }
 
 
-gsatlc/qdel() {
+gsatlc/qdel()
+{
         #  remove a job from gsatellite
         #
         #  usage:
@@ -216,7 +234,8 @@ gsatlc/qdel() {
 }
 
 
-gsatlc/schedule() {
+gsatlc/schedule()
+{
         #  call scheduler to start the next ready job
         #
         #  usage:
