@@ -4,7 +4,7 @@
 
 :<<COPYRIGHT
 
-Copyright (C) 2011, 2012 Frank Scheiner
+Copyright (C) 2011, 2012, 2013 Frank Scheiner
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -57,8 +57,8 @@ _gscheduleBaseDir="$_gsatBaseDir/gschedule"
 ################################################################################
 
 #  ignore SIGINT and SIGTERM
-trap 'echo "($$) DEBUG: SIGINT received." >&1' SIGINT
-trap 'echo "($$) DEBUG: SIGTERM received." >&1' SIGTERM
+trap 'echo "($$) DEBUG: SIGINT received." >> "$__GLOBAL__sputnikLogFile"' SIGINT
+trap 'echo "($$) DEBUG: SIGTERM received." >> "$__GLOBAL__sputnikLogFile"' SIGTERM
 
 sputnik/holdJob() {
         #  Put a hold on a job
@@ -106,20 +106,8 @@ sputnik/runJob() {
         local _parentInbox="$3"
 
         local _jobTmpDir=$( dirname "$_job" )
-
-	chmod +x "$_job"
-
-        #  run job in the background to get its PID. We need its PID to be able
-        #+ to interact with it with signals later.
-        cd "$_jobTmpDir" && \
-	$_job 1>"$_jobDir/job.stdout" 2>"$_jobDir/job.stderr" &
-
-        local _jobPid="$!"
-
-        #  save job's PID
-        echo "$_jobPid" > "$_jobDir/job.pid"
-
-	#  determine values for add. environment
+        
+        #  determine values for add. environment
 	local _jobId="$__GLOBAL__jobId"
 	local _jobDir=$( gschedule/getJobDir "$_jobId" )
 	local _jobName=$( basename "$_job" )
@@ -143,6 +131,18 @@ sputnik/runJob() {
 	EOF
 
 	. "$_environmentFile"
+
+	chmod +x "$_job"
+
+        #  run job in the background to get its PID. We need its PID to be able
+        #+ to interact with it with signals later.
+        cd "$_jobTmpDir" && \
+	$_job 1>"$_jobDir/job.stdout" 2>"$_jobDir/job.stderr" &
+
+        local _jobPid="$!"
+
+        #  save job's PID
+        echo "$_jobPid" > "$__GLOBAL__jobPidFile"	
 
         #  wait for the job to terminate
         wait "$_jobPid"
@@ -185,11 +185,12 @@ processMsg() {
         _answerBox=$( echo "$_message" | cut -d ';' -f 2 )
 
         #  special functionality
-        if [[ "$_command" == "WAKE UP" ]]; then
+        if [[ "$_command" =~ '^WAKE UP$' ]]; then
                 #echo "sputnik: awake!"
                 return
 
         elif [[ "$_command" =~ ^TERMINATED.* ]]; then
+        	#  only do something if job is not held
                 if [[ $_jobHeld -eq 0 ]]; then
                 
                 	#  command is "TERMINATED <EXIT_VALUE>"
@@ -261,6 +262,14 @@ _job="$1"
 _jobDir="$2" #  e.g. "$_gscheduleJobsDir/$_jobId.d"
 __GLOBAL__jobId="$3"
 
+__GLOBAL__jobPidFile="$_jobDir/job.pid"
+
+__GLOBAL__jobPid=""
+
+__GLOBAL__sputnikLogFile="$_jobDir/sputnik.log"
+
+touch "$__GLOBAL__sputnikLogFile"
+
 _jobHeld=0
 
 #if [[ ! -e "$_job" ]]; then
@@ -310,12 +319,22 @@ while [[ 1 ]]; do
                 #processMsg "$_message" &
                 processMsg "$_message" "$_inbox"
         else
+        	#  get job PID
+        	if [[ "$__GLOBAL__jobPid" == "" ]]; then
+			__GLOBAL__jobPid=$( cat "$__GLOBAL__jobPidFile" )
+		fi
+		
+		if [[ "$__GLOBAL__jobPid" != "" ]]; then
+			#  touch job PID file to indicate that job's still running
+		        if kill -0 "$__GLOBAL__jobPid" &>/dev/null; then		        	
+		        	touch -a "$__GLOBAL__jobPidFile"
+		        fi
+		fi
+                
                 #  pause execution
                 #  If you need something, wake me up!
                 /bin/kill -SIGSTOP "$_self"
         fi
-
-        #echo "awake!"
 
 done
 
