@@ -3,7 +3,7 @@
 
 :<<COPYRIGHT
 
-Copyright (C) 2012 Frank Scheiner
+Copyright (C) 2012, 2013 Frank Scheiner
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -37,8 +37,12 @@ FUNCTIONS
 
 . "$_LIB"/utils.bashlib
 . "$_LIB"/ipc.bashlib
+. "$_LIB"/jobTypes.bashlib
 
 readonly _gschedule_version="0.1.0"
+
+#  maximum number of job restarts
+readonly __GLOBAL__maxJobRestarts=3
 
 _gsatBaseDir=$HOME/.gsatellite
 _gscheduleBaseDir="$_gsatBaseDir/gschedule"
@@ -104,7 +108,6 @@ fi
 #  Example:
 #
 #  #!/bin/bash
-#+ #%gsatjob%
 #+ gtransfer -s gsiftp://host.domain1:2811/myfiles/* -d gsiftp://host.domain2:2811/myfiles/
 
 ################################################################################
@@ -124,24 +127,54 @@ gschedule/handleTerminatedJob() {
 
         local _jobDir="$_gscheduleJobsDir/$_jobId.d"
 
-        #  lock both "running" and "finished" dir
-
+	#  lock both "running" and "finished" dir
         #  "move" the job from the "running" dir to the "finished" or "failed" 
         #+ dir, depending on the exit value.
         rm "$_gscheduleBaseDir/running/$_jobId.d"
 
-        if [[ "$_jobExitValue" == "0" ]]; then
-                #  job finished successfully
-                ln -s "$_jobDir" "$_gscheduleFinishedDir/$_jobId.d" && \
-                echo "finished" > "$_gscheduleJobsDir/$_jobId.d/job.state"
+	#  evaluate job type and react to exit value accordingly
+	local _job="${_gscheduleJobsDir}/${_jobId}.d/${_jobId}"
 
-        else
-                #  job failed
-                ln -s "$_jobDir" "$_gscheduleFailedDir/$_jobId.d" && \
-                echo "failed" > "$_gscheduleJobsDir/$_jobId.d/job.state"
+	local _jobType=$( jobTypes/getJobType "$_job" )
+	
+	local _action=$( jobTypes/${_jobType}/evaluateExitValue "$_jobExitValue" )
+	echo "($$) [DEBUG] _jobId=\"$_jobId\",_jobExitValue=\"$_jobExitValue\",_jobType=\"$_jobType\",_action=\"$_action\"" 1>&2
 
-        fi
+	if [[ "$_action" == "RESTART" ]]; then
 
+		local _jobRestarts=0
+		
+		if [[ ! -e "$_jobDir"/job.restarts ]]; then
+			echo "$_jobRestarts" > "$_jobDir"/job.restarts
+		else
+			_jobRestarts=$( cat "$_jobDir"/job.restarts )
+		fi
+		
+		if [[ ! $_jobRestarts -ge $__GLOBAL__maxJobRestarts ]]; then
+			_jobRestarts=$(( $_jobRestarts + 1 ))
+			echo "$_jobRestarts" > "$_jobDir"/job.restarts
+			
+			#  hold job but return special value
+			gschedule/holdJob "$_jobId"
+			return 2
+		fi
+	fi	
+		
+	#if [[ "$_action" == "TERMINATE" ]]; then
+	#else
+
+	if [[ "$_jobExitValue" == "0" ]]; then
+	        #  job finished successfully
+	        ln -s "$_jobDir" "$_gscheduleFinishedDir/$_jobId.d" && \
+	        echo "finished" > "$_gscheduleJobsDir/$_jobId.d/job.state"
+
+	else
+	        #  job failed
+	        ln -s "$_jobDir" "$_gscheduleFailedDir/$_jobId.d" && \
+	        echo "failed" > "$_gscheduleJobsDir/$_jobId.d/job.state"
+
+	fi
+	#fi
         #  unlock both "running" and "finished" dir
 
         return
@@ -330,9 +363,9 @@ gschedule/holdJob() {
         local _jobDir="$_gscheduleBaseDir/jobs/$_jobId.d"
 
         #  try to lock job dir until locked
-        while ! ipc/lock "$_jobDir"; do
-                sleep 1
-        done        
+        #while ! ipc/lock "$_jobDir"; do
+        #        sleep 1
+        #done        
 
         #  if job is running, 
         if gschedule/isRunningJob "$_jobId"; then
@@ -397,13 +430,13 @@ gschedule/holdJob() {
         		ln -s "$_jobDir" "$_gscheduleHeldDir/$_jobId.d" && \
 			echo "held" > "$_gscheduleJobsDir/$_jobId.d/job.state"
 
-			ipc/unlock "$_jobDir"
+			#ipc/unlock "$_jobDir"
                         
                         return 0
                 else
                         ipc/file/removeMsgBox "$_tempMsgBox"
                         
-                        ipc/unlock "$_jobDir"
+                        #ipc/unlock "$_jobDir"
                         
                         return 1
                 fi
@@ -415,7 +448,7 @@ gschedule/holdJob() {
         ln -s "$_jobDir" "$_gscheduleHeldDir/$_jobId.d" && \
         echo "held" > "$_gscheduleJobsDir/$_jobId.d/job.state"
 
-        ipc/unlock "$_jobDir"
+        #ipc/unlock "$_jobDir"
 
         return
 }

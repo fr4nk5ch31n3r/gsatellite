@@ -151,10 +151,22 @@ gsatlc/processMsg()
                 if gschedule/isRunningJob "$_jobId"; then
                         gschedule/handleTerminatedJob "$_jobId" "$_jobExitValue"
 
-                        if [[ "$?" == "0" ]]; then
+			local _funcRetVal=$?
+
+                        if [[ "$_funcRetVal" == "0" ]]; then
                                 #  schedule/start next ready job
                                 gsatlc/schedule
                                 return
+			#  job terminated but can be restarted (e.g. because of
+			#+ a temporary error). Job is held. First start next job
+			#+ and then release current job, so that it is started
+			#+ afterwards.
+			elif [[ "$_funcRetVal" == "2" ]]; then
+				#  schedule/start next ready job
+				gsatlc/schedule
+				#  release hold on restartable job
+				gsatlc/qrls "$_jobId"
+				return
                         else
                                 return 1
                         fi
