@@ -4,7 +4,7 @@
 
 _prefixDir="$HOME/opt"
 #  Provider of the software, e.g. project name or similar
-_provider=""
+_provider="clusterd"
 _product="gsatellite"
 
 # user install activated? 0 => no, 1 => yes
@@ -63,21 +63,21 @@ if [[ "$(basename $0)" == "install.sh" ]]; then
 	#  if this is a user install create links in "$HOME/bin"
 	if [[ $_userInstall -eq 1 ]]; then
 		linkPath="$HOME"
-		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gsatctl"
-		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gqstat"
-		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gqsub"
-		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gqhold"
-		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gqrls"
-		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gqdel"
+		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gsatctl" &>/dev/null
+		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gqstat" &>/dev/null
+		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gqsub" &>/dev/null
+		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gqhold" &>/dev/null
+		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gqrls" &>/dev/null
+		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gqdel" &>/dev/null
 
-		ln -s "$_prefixDir/$_provider/$_product/bin/sendcmd.bash" "$linkPath/bin/sendcmd"
+		ln -s "$_prefixDir/$_provider/$_product/bin/sendcmd.bash" "$linkPath/bin/sendcmd" &>/dev/null
 
-		ln -s "$_prefixDir/$_provider/$_product/bin/gsatlc.bash" "$linkPath/bin/gsatlc"
-		ln -s "$_prefixDir/$_provider/$_product/bin/gsatlcd.bash" "$linkPath/bin/gsatlcd"
-		ln -s "$_prefixDir/$_provider/$_product/bin/sigfwd.bash" "$linkPath/bin/sigfwd"
-		ln -s "$_prefixDir/$_provider/$_product/bin/sigfwdd.bash" "$linkPath/bin/sigfwdd"
-	     	ln -s "$_prefixDir/$_provider/$_product/bin/sputnik.bash" "$linkPath/bin/sputnik"
-		ln -s "$_prefixDir/$_provider/$_product/bin/sputnikd.bash" "$linkPath/bin/sputnikd"
+		ln -s "$_prefixDir/$_provider/$_product/bin/gsatlc.bash" "$linkPath/bin/gsatlc" &>/dev/null
+		ln -s "$_prefixDir/$_provider/$_product/bin/gsatlcd.bash" "$linkPath/bin/gsatlcd" &>/dev/null
+		ln -s "$_prefixDir/$_provider/$_product/bin/sigfwd.bash" "$linkPath/bin/sigfwd" &>/dev/null
+		ln -s "$_prefixDir/$_provider/$_product/bin/sigfwdd.bash" "$linkPath/bin/sigfwdd" &>/dev/null
+	     	ln -s "$_prefixDir/$_provider/$_product/bin/sputnik.bash" "$linkPath/bin/sputnik" &>/dev/null
+		ln -s "$_prefixDir/$_provider/$_product/bin/sputnikd.bash" "$linkPath/bin/sputnikd" &>/dev/null
 	fi
 
 	#  copy README and manpages
