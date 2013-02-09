@@ -141,6 +141,9 @@ sputnik/runJob() {
 
         local _jobPid="$!"
 
+	#  record job start timestamp
+	date +%s >> "$_jobDir/job.start"
+
         #  save job's PID
         echo "$_jobPid" > "$__GLOBAL__jobPidFile"	
 
@@ -148,6 +151,9 @@ sputnik/runJob() {
         wait "$_jobPid"
 
         local _jobExitValue="$?"
+
+	#  record job stop timestamp
+	date +%s >> "$_jobDir/job.stop"
 
 	#  save job's exit value
 	echo "$_jobExitValue" > "$_jobDir/job.exit"
