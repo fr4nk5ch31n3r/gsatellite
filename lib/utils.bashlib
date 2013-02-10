@@ -30,6 +30,7 @@ utils/exit
 utils/getHostName
 utils/dirname
 utils/basename
+utils/echoIfDebug
 FUNCTIONS
 
 utils/wakeUp() {
@@ -114,5 +115,17 @@ utils/basename() {
         echo ${fileName##*/}
 
         return
+}
+
+
+utils/echoIfDebug() {
+
+	local _debugMessage="$1"
+
+	if [[ "$_GSAT_DEBUG" == "1" ]]; then
+		echo "($$) [DEBUG] $_debugMessage" 1>&2
+	fi
+
+	return
 }
 
