@@ -190,16 +190,20 @@ gschedule/prepareJob() {
         local _job="$1"
         local _jobId="$2"
 
+	local _jobName=$( basename "$_job" )
+
         #  first create an own dir for the job
         local _jobDir="$_gscheduleBaseDir/jobs/$_jobId.d"
         mkdir "$_jobDir"
 
         echo "$_jobId" > "$_jobDir/jobId"
+	echo "$_jobId" > "$_jobDir/job.id"
+	echo "$_jobName" > "$_jobDir/job.name"
 
         #  place a copy of the job in "jobtmp" in the "jobs" dir
         mkdir "$_jobDir/jobtmp"
         cp "$_job" "$_jobDir/jobtmp"
-        ln -s "$_jobDir/jobtmp/$( basename $_job )" "$_jobDir/$_jobId"
+        ln -s "$_jobDir/jobtmp/$_jobName" "$_jobDir/$_jobId"
 
         return
 }
