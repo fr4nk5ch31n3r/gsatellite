@@ -84,9 +84,7 @@ readonly __GLOBAL__jobAttributes=( "job.id"
                                    "job.execHost"
                                    "job.pid"
                                    "job.start"
-                                   "job.stop"
-                                   "job.stdout"
-                                   "job.stderr" )
+                                   "job.stop" )
 
 
 #  include needed libaries
@@ -250,8 +248,9 @@ gqstat/listJobDetailed()
 			#  NOTICE: Command substitution removes trailing newlines
 			echo "${_jobAttribute}=\"$( cat "$_jobAttributeFile" )\"" 
 	
-		elif [[ "$_jobAttribute" == "job.dir" ]]; then
-	
+		elif [[ "$_jobAttribute" == "job.dir" &&\
+		        "$_jobDir" != "" \
+		]]; then
 			echo "${_jobAttribute}=\"$_jobDir\""
 		fi
 	done
