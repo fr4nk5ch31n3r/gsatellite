@@ -1,20 +1,20 @@
-# gsatellite - Your personal job scheduler
+# gsatellite - Your personal job scheduler #
 
 "gsatellite" - or short "gsat" - is a rather complete set of tools that in
 combination comprise a small job scheduler for personal use. In combination with
-gtransfer, gsat allows to submit and schedule possibly long running data
-transfer jobs and let them run and be monitored by a process under full control
+gtransfer, gsat allows to submit and schedule possibly long running (data
+transfer) jobs and let them run and be monitored by a process under full control
 of but without the need of interference by a user. This way a user can log in to
-a or multiple (frontend) machines, submit his jobs and leave and let gsat take
+one or multiple (frontend) machines, submit his jobs and leave and let gsat take
 care of the remaining work, which includes:
 
-* scheduling a job (with a plugin and hence interchangeable scheduler)
+* scheduling a job (with a plugin scheduler (currently FIFO and non-batch schedulers available)
 * running a job
 * monitoring a job
-* and possibly rerunning a job that failed
+* and possibly rerunning a job that failed (see [demo#2](https://github.com/fr4nk5ch31n3r/gsatellite/wiki/Gsatellite-demo-02) for details)
 
 A user can then return at any time and check the status of its jobs.
 
-Please consider the [gsatellite wiki page](https://github.com/fr4nk5ch31n3r/gsatellite/wiki/Gsatellite-explained)
-on GitHub for more details.
+Please consider the [gsatellite wiki pages](https://github.com/fr4nk5ch31n3r/gsatellite/wiki)
+on GitHub for more details and [demo#1](https://github.com/fr4nk5ch31n3r/gsatellite/wiki/Gsatellite-demo-01) for general usage and features of gsatellite.
 
