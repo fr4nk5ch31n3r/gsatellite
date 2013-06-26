@@ -49,6 +49,7 @@ if [[ "$(basename $0)" == "install.sh" ]]; then
         #        |                                                             + remove (special) comments
         #        |                                                             |
         sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -e 's/#sed#//g' -i "$_prefixDir/$_provider/$_product/bin/gsatctl.bash"
+        sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -e 's/#sed#//g' -i "$_prefixDir/$_provider/$_product/bin/gqstat.bash"
         sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -e 's/#sed#//g' -i "$_prefixDir/$_provider/$_product/bin/gsatlc.bash"
         sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -e 's/#sed#//g' -i "$_prefixDir/$_provider/$_product/bin/sendcmd.bash"
         sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -e 's/#sed#//g' -i "$_prefixDir/$_provider/$_product/bin/sigfwd.bash"
@@ -64,7 +65,7 @@ if [[ "$(basename $0)" == "install.sh" ]]; then
 	if [[ $_userInstall -eq 1 ]]; then
 		linkPath="$HOME"
 		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gsatctl" &>/dev/null
-		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gqstat" &>/dev/null
+		ln -s "$_prefixDir/$_provider/$_product/bin/gqstat.bash" "$linkPath/bin/gqstat" &>/dev/null
 		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gqsub" &>/dev/null
 		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gqhold" &>/dev/null
 		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gqrls" &>/dev/null

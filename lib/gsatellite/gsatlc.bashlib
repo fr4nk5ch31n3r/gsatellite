@@ -1,0 +1,264 @@
+#  gsatlc.bashlib - library functions for gsatellite launch control
+
+:<<COPYRIGHT
+
+Copyright (C) 2012 Frank Scheiner
+
+The program is distributed under the terms of the GNU General Public License
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+COPYRIGHT
+
+:<<INCLUDE
+ipc.bashlib
+gschedule.bashlib
+INCLUDE
+
+:<<FUNCTIONS
+FUNCTIONS
+
+_scheduler="fifo"
+#_scheduler="nobatch"
+
+. "$_LIB"/ipc.bashlib
+. "$_LIB"/gschedule/$_scheduler.bashlib
+
+
+gsatlc/processMsg()
+{
+        #  process a received message
+        #
+        #  usage:
+        #+ processMsg message inbox
+
+        local _message="$1"
+        local _inbox="$2"
+
+        local _command=""
+        local _answerBox=""
+
+        _command=$( echo "$_message" | cut -d ';' -f 1 )
+        _answerBox=$( echo "$_message" | cut -d ';' -f 2 )
+
+        #  event: JOB_SUBMISSION
+        if [[ "$_command" =~ ^QSUB.* ]]; then
+                #  _command is "QSUB <JOB_WITH_FULL_PATH>"
+                local _job=${_command##QSUB }
+
+                local _jobId=$( gsatlc/qsub "$_job" )
+
+                if [[ "$?" == "0" ]]; then
+                        ipc/file/sendMsg "$_answerBox" "$_jobId;$_inbox"
+                else
+                        ipc/file/sendMsg "$_answerBox" "qsub failed;$_inbox"
+                fi
+
+                #echo "I: $_job submitted!"
+                return
+
+        #  event: qhold
+        elif [[ "$_command" =~ ^QHOLD.* ]]; then
+                #  _command is "QHOLD <JOB_ID>"
+                local _jobId=${_command##QHOLD }
+
+		if gschedule/isRunningJob "$_jobId"; then 
+			local _runningJob=1
+		else
+			local _runningJob=0
+		fi
+
+                gsatlc/qhold "$_jobId"
+                local _funcRetVal="$?"
+
+                if [[ "$_funcRetVal" == "0" ]]; then
+                        ipc/file/sendMsg "$_answerBox" "OK;$_inbox"
+                        if [[ $_runningJob -eq 1 ]]; then
+                        	gsatlc/schedule
+                        fi
+                elif [[ "$_funcRetVal" == "$_gschedule_errorInvalidJobId" ]]; then
+                        ipc/file/sendMsg "$_answerBox" "qhold failed: invalid job id;$_inbox"
+		else
+			ipc/file/sendMsg "$_answerBox" "qhold failed;$_inbox"
+                fi
+
+                return
+
+        #  event: qrls
+        elif [[ "$_command" =~ ^QRLS.* ]]; then
+                #  _command is "QRLS <JOB_ID>"
+                local _jobId=${_command##QRLS }
+
+                gsatlc/qrls "$_jobId"
+                local _funcRetVal="$?"
+
+                if [[ "$_funcRetVal" == "0" ]]; then
+                        ipc/file/sendMsg "$_answerBox" "OK;$_inbox"
+                elif [[ "$_funcRetVal" == "$_gschedule_errorInvalidJobId" ]]; then
+                        ipc/file/sendMsg "$_answerBox" "qrls failed: invalid job id;$_inbox"
+                fi
+
+                return
+
+        #  event: qdel
+        elif [[ "$_command" =~ ^QDEL.* ]]; then
+                #  _command is "QDEL <JOB_ID>"
+                local _jobId=${_command##QDEL }
+
+                gsatlc/qdel "$_jobId"
+                local _funcRetVal="$?"
+
+                if [[ "$_funcRetVal" == "0" ]]; then
+                        ipc/file/sendMsg "$_answerBox" "OK;$_inbox"
+                elif [[ "$_funcRetVal" == "$_gschedule_errorRunningJob" ]]; then
+                        ipc/file/sendMsg "$_answerBox" "qdel failed: running job;$_inbox"
+                elif [[ "$_funcRetVal" == "$_gschedule_errorInvalidJobId" ]]; then
+                        ipc/file/sendMsg "$_answerBox" "qdel failed: invalid job id;$_inbox"
+                fi
+
+                return
+
+        #  event: JOB_TERMINATION
+        elif [[ "$_command" =~ ^TERMINATED.* ]]; then
+                #  _command is "TERMINATED <JOB_ID> <EXIT_VALUE>"
+                local _jobId=$( echo "$_command" | cut -d ' ' -f 2 )
+                local _jobExitValue=$( echo "$_command" | cut -d ' ' -f 3 )
+
+		echo "($$) DEBUG: Before onEvent() $( date +%s)" 1>&2
+
+		echo "($$) DEBUG: _jobId=\"$_jobId\"" 1>&2
+
+		local _environment=$( gschedule/getJobDir "$_jobId" )"/${_gschedule_jobEnvFileName}"
+
+		echo "($$) DEBUG: _environment=\"$_environment\"" 1>&2
+
+		gschedule/onEvent "JOB_TERMINATION" "$_environment" &
+
+		echo "($$) DEBUG: After onEvent() $( date +%s)" 1>&2
+
+                #  check if job is/was in running state
+                if gschedule/isRunningJob "$_jobId"; then
+                        gschedule/handleTerminatedJob "$_jobId" "$_jobExitValue"
+
+			local _funcRetVal=$?
+
+                        if [[ "$_funcRetVal" == "0" ]]; then
+                                #  schedule/start next ready job
+                                gsatlc/schedule
+                                return
+			#  job terminated but can be restarted (e.g. because of
+			#+ a temporary error). Job is held. First start next job
+			#+ and then release current job, so that it is started
+			#+ afterwards.
+			elif [[ "$_funcRetVal" == "2" ]]; then
+				#  schedule/start next ready job
+				gsatlc/schedule
+				#  release hold on restartable job
+				gsatlc/qrls "$_jobId"
+				return
+                        else
+                                return 1
+                        fi
+                fi                
+
+        #  unknown event or command
+        else
+                return 2
+
+        fi
+}
+
+
+gsatlc/qsub()
+{
+        #  submit a job to gsatellite
+        #
+        #  usage:
+        #+ gsatlc/qsub job
+
+        local _job="$1"
+
+        local _jobId=$( gschedule/$_scheduler/schedule "$_job" )
+
+        if [[ "$?" == "0" ]]; then
+                echo "$_jobId"
+                return 0
+        else
+                return 1
+        fi
+}
+
+
+gsatlc/qhold()
+{
+        #  hold a job
+        #
+        #  usage:
+        #+ gsatlc/qhold jobId
+
+        local _jobId="$1"
+
+        gschedule/holdJob "$_jobId"
+
+        return
+}
+
+
+gsatlc/qrls()
+{
+        #  release a hold on a job
+        #
+        #  usage:
+        #+ gsatlc/qrls jobId
+
+        local _jobId="$1"
+
+        gschedule/releaseJob "$_jobId"
+        gsatlc/schedule
+
+        return
+}
+
+
+gsatlc/qdel()
+{
+        #  remove a job from gsatellite
+        #
+        #  usage:
+        #+ gsatlc/qdel jobId
+
+        local _jobId="$1"
+
+        gschedule/removeJob "$_jobId"
+
+        return
+}
+
+
+gsatlc/schedule()
+{
+        #  call scheduler to start the next ready job
+        #
+        #  usage:
+        #+ gsatlc/schedule
+
+        gschedule/$_scheduler/schedule
+
+        if [[ "$?" == "0" ]]; then
+                return 0
+        else
+                return 1
+        fi
+}
+
