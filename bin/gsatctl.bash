@@ -53,6 +53,10 @@ if [[ -e "/etc/gsatellite" ]]; then
 elif [[ -e "/etc/opt/gsatellite" ]]; then
         _configurationFilesPath="/etc/opt/gsatellite"
 
+# For git deploy, use $BASH_SOURCE
+elif [[ -e "$( dirname $BASH_SOURCE )/../etc" ]]; then
+	_configurationFilesPath="$( dirname $BASH_SOURCE )/../etc"
+
 #  For user install in $HOME:
 elif [[ -e "$HOME/.gsatellite" ]]; then
         _configurationFilesPath="$HOME/.gsatellite"
