@@ -42,6 +42,7 @@ if [[ "$(basename $0)" == "install.sh" ]]; then
 	#  copy scripts and libs
 	cp -rd ./bin "$_prefixDir/$_provider/$_product/"
 	cp -rd ./lib "$_prefixDir/$_provider/$_product/"
+	cp -rd ./libexec "$_prefixDir/$_provider/$_product/"
 
         #  reconfigure paths inside of the scripts and configurations files
         #        + reconfigure path to configuration files
@@ -55,11 +56,12 @@ if [[ "$(basename $0)" == "install.sh" ]]; then
         sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -e 's/#sed#//g' -i "$_prefixDir/$_provider/$_product/bin/sigfwd.bash"
         sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -e 's/#sed#//g' -i "$_prefixDir/$_provider/$_product/bin/sputnik.bash"
         
-	if [[ $_userInstall -eq 1 ]]; then
-        	sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -i "$HOME/.$_product/paths.conf"
-        else
-        	sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -i "$_prefixDir/$_provider/$_product/etc/paths.conf"
-	fi
+	# not needed any longer
+	#if [[ $_userInstall -eq 1 ]]; then
+        #	sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -i "$HOME/.$_product/paths.conf"
+        #else
+        #	sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -i "$_prefixDir/$_provider/$_product/etc/paths.conf"
+	#fi
 
 	#  if this is a user install create links in "$HOME/bin"
 	if [[ $_userInstall -eq 1 ]]; then
