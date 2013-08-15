@@ -3,6 +3,7 @@
 :<<COPYRIGHT
 
 Copyright (C) 2012 Frank Scheiner
+Copyright (C) 2013 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -35,7 +36,7 @@ ipc/file/sigfwd/startSigFwd
 ipc/file/sigfwd/stopSigFwd
 FUNCTIONS
 
-#_DEBUG="1"
+_DEBUG="0"
 
 _ipc_file_sigfwdInboxName="sigfwd.inbox"
 _ipc_file_sigfwdPid=""
@@ -70,6 +71,120 @@ ipc/file/sigfwd/stopSigfwd() {
         fi
 }
 
+# delegateAction() - Delegate action to signal forwarder. This allows the signal
+# forwarder to execute actions on behalf of a pausing process.
+#
+# @_action: The file that contains the action. The signal forwarder will execute
+#           this file in the background.
+#
+# Prints the action ID and returns 0 on success, 1 otherwise.
+ipc/file/sigfwd/delegateAction()
+{
+	local _hostName="$1"
+	local _action="$2"
+
+	#  use a temporary inbox when contacting the signal forwarder
+        local _answerBox=$( ipc/file/createTempMsgBox )
+
+        if [[ "$?" != "0" ]]; then
+                [[ "$_DEBUG" == "1" ]] && echo "($$) [sigfwd.bashlib] DEBUG: in delegateAction _answerBox=\"$_answerBox\" creation failed." 1>&2
+                echo "($$) [sigfwd.bashlib] E: Temporary message box couldn't be created!" 1>&2
+                return 1
+        else
+                [[ "$_DEBUG" == "1" ]] && echo "($$) [sigfwd.bashlib] DEBUG: in delegateAction _answerBox=\"$_answerBox\"" 1>&2
+        fi
+
+	# TODO:
+	# How to support paths that include " " in dir names?
+        ipc/file/sendMsg "$_MBOXES/$_hostName/$_ipc_file_sigfwdInboxName" "DELEGATE_ACTION $_action;$_answerBox" || \
+        return 1
+
+	local _answer=""
+
+        while [[ 1 ]]; do
+                #  touch it first, so changes on other hosts are propagated
+                touch --no-create "$_answerBox"
+                if ipc/file/messageAvailable "$_answerBox"; then
+                        _answer=$( ipc/file/receiveMsg "$_answerBox" )
+
+                        local _funcRetVal="$?"
+
+                        if [[ "$_funcRetVal" == "0" ]]; then
+                                [[ "$_DEBUG" == "1" ]] && echo "($$) [sigfwd.bashlib] DEBUG: in delegateAction received \"$_answer\"" 1>&2
+                                # print action ID
+                                echo ${answer%%;*}
+                                ipc/file/removeMsgBox "$_answerBox"
+                                break
+                        else
+                                [[ "$_DEBUG" == "1" ]] && echo "($$) [sigfwd.bashlib] DEBUG: in delegateAction receiveMsg didn't return \"0\"" 1>&2
+                        fi
+                else
+                        sleep 0.5
+                fi
+        done
+
+        return $_funcRetVal
+}
+
+
+# undelegateAction() - Undelegate (stop) the action identified by the given PID.
+#
+# @_actionId: Valid action ID
+#
+# Returns 0 on success, 1 otherwise.
+ipc/file/sigfwd/undelegateAction()
+{
+	local _hostName="$1"
+	local _actionId="$2"
+
+	#  use a temporary inbox when contacting the signal forwarder
+        local _answerBox=$( ipc/file/createTempMsgBox )
+
+        if [[ "$?" != "0" ]]; then
+                [[ "$_DEBUG" == "1" ]] && echo "($$) [sigfwd.bashlib] DEBUG: in undelegateAction _answerBox=\"$_answerBox\" creation failed." 1>&2
+                echo "($$) [sigfwd.bashlib] E: Temporary message box couldn't be created!" 1>&2
+                return 1
+        else
+                [[ "$_DEBUG" == "1" ]] && echo "($$) [sigfwd.bashlib] DEBUG: in undelegateAction _answerBox=\"$_answerBox\"" 1>&2
+        fi
+
+	# TODO:
+	# How to support paths that include " " in dir names?
+        ipc/file/sendMsg "$_MBOXES/$_hostName/$_ipc_file_sigfwdInboxName" "UNDELEGATE_ACTION $_actionId;$_answerBox" || \
+        return 1
+
+	local _answer=""
+
+        while [[ 1 ]]; do
+                #  touch it first, so changes on other hosts are propagated
+                touch --no-create "$_answerBox"
+                if ipc/file/messageAvailable "$_answerBox"; then
+                        _answer=$( ipc/file/receiveMsg "$_answerBox" )
+
+                        local _funcRetVal="$?"
+
+                        if [[ "$_funcRetVal" == "0" ]]; then
+                                [[ "$_DEBUG" == "1" ]] && echo "($$) [sigfwd.bashlib] DEBUG: in undelegateAction received \"$_answer\"" 1>&2
+                                if [[ ${answer%%;*} == "OK" ]]; then
+					local _returnVal=0
+                                else
+					local _returnVal=1
+                                fi
+                                break
+                        else
+                                [[ "$_DEBUG" == "1" ]] && echo "($$) [sigfwd.bashlib] DEBUG: in undelegateAction receiveMsg() didn't return \"0\"" 1>&2
+                        fi
+                else
+                        sleep 0.5
+                fi
+        done
+
+        ipc/file/removeMsgBox "$_answerBox"
+
+        return $_returnVal
+}
+
+
 #  TODO:
 #  Needs some rework (message receiving)!
 ipc/file/sigfwd/forwardSignal() {
@@ -89,11 +204,11 @@ ipc/file/sigfwd/forwardSignal() {
         local _answerBox=$( ipc/file/createTempMsgBox )
 
         if [[ "$?" != "0" ]]; then
-                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in forwardSignal() _answerBox=\"$_answerBox\"" 1>&2
-                echo "E: Temporary message box couldn't be created! Exiting." 1>&2
+                [[ "$_DEBUG" == "1" ]] && echo "($$) [sigfwd.bashlib] DEBUG: in forwardSignal _answerBox=\"$_answerBox\" creation failed." 1>&2
+                echo "($$) [sigfwd.bashlib] E: Temporary message box couldn't be created!" 1>&2
                 return 1
         else
-                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in forwardSignal() _answerBox=\"$_answerBox\"" 1>&2
+                [[ "$_DEBUG" == "1" ]] && echo "($$) [sigfwd.bashlib] DEBUG: in forwardSignal _answerBox=\"$_answerBox\"" 1>&2
         fi
 
         ipc/file/sendMsg "$_MBOXES/$_hostName/$_ipc_file_sigfwdInboxName" "$_signal $_pid;$_answerBox" || \
@@ -110,11 +225,11 @@ ipc/file/sigfwd/forwardSignal() {
                         local _funcRetVal="$?"
 
                         if [[ "$_funcRetVal" == "0" ]]; then
-                                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in forwardSignal() received \"$_answer\"" 1>&2
+                                [[ "$_DEBUG" == "1" ]] && echo "($$) [sigfwd.bashlib] DEBUG: in forwardSignal received \"$_answer\"" 1>&2
                                 ipc/file/removeMsgBox "$_answerBox"
                                 break
                         else
-                                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: in forwardSignal() receiveMsg() didn't return \"0\"" 1>&2
+                                [[ "$_DEBUG" == "1" ]] && echo "($$) [sigfwd.bashlib] DEBUG: in forwardSignal receiveMsg didn't return \"0\"" 1>&2
                         fi
                 else
                         sleep 0.5
