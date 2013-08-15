@@ -5,6 +5,7 @@
 :<<COPYRIGHT
 
 Copyright (C) 2011, 2012 Frank Scheiner
+Copyright (C) 2013 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -27,46 +28,71 @@ umask 0077
 
 _DEBUG="0"
 
+_program=$( basename "$0" )
+
+_sendcmdVersion="0.2.0"
+
+readonly _exit_usage=64
+readonly _exit_ok=0
+readonly _exit_software=70
+
+################################################################################
+
 #  path to configuration files (prefer system paths!)
 #  For native OS packages:
 if [[ -e "/etc/gsatellite" ]]; then
-        _gsatConfigurationFilesPath="/etc/gsatellite"
+        _configurationFilesPath="/etc/gsatellite"
 
 #  For installation with "install.sh".
 #sed#elif [[ -e "<PATH_TO_GSATELLITE>/etc" ]]; then
-#sed#	_gsatConfigurationFilesPath="<PATH_TO_GSATELLITE>/etc"
+#sed#	_configurationFilesPath="<PATH_TO_GSATELLITE>/etc"
 
 #  According to FHS 2.3, configuration files for packages located in "/opt" have
 #+ to be placed here (if you use a provider super dir below "/opt" for the
 #+ gtransfer files, please also use the same provider super dir below
 #+ "/etc/opt").
 #elif [[ -e "/etc/opt/<PROVIDER>/gsatellite" ]]; then
-#	_gsatConfigurationFilesPath="/etc/opt/<PROVIDER>/gsatellite"
+#	_configurationFilesPath="/etc/opt/<PROVIDER>/gsatellite"
 elif [[ -e "/etc/opt/gsatellite" ]]; then
-        _gsatConfigurationFilesPath="/etc/opt/gsatellite"
+        _configurationFilesPath="/etc/opt/gsatellite"
+
+# For git deploy, use $BASH_SOURCE
+elif [[ -e "$( dirname $BASH_SOURCE )/../etc" ]]; then
+	_configurationFilesPath="$( dirname $BASH_SOURCE )/../etc"
 
 #  For user install in $HOME:
 elif [[ -e "$HOME/.gsatellite" ]]; then
-        _gsatConfigurationFilesPath="$HOME/.gsatellite"
+	_configurationFilesPath="$HOME/.gsatellite"
 fi
 
-_gsatPathsConfigurationFile="$_gsatConfigurationFilesPath/paths.conf"
+_pathsConfigurationFile="$_configurationFilesPath/paths.conf"
 
 #  include path config or fail with EX_SOFTWARE = 70, internal software error
 #+ not related to OS
-if ! . "$_gsatPathsConfigurationFile"; then
-	echo "($_program) E: Paths configuration file couldn't be read or is corrupted." 1>&2
-	exit 70
+if ! . "$_pathsConfigurationFile"; then
+	echo "[$_program] E: Paths configuration file couldn't be read or is corrupted." 1>&2
+	exit $_exit_software
 fi
-
-#. "$_LIB"/ipc.bashlib
-#. "$_LIB"/ipc/file.bashlib
-. "$_LIB"/ipc/file/sigfwd.bashlib
-. "$_LIB"/gsatlc.bashlib
 
 ################################################################################
 
-_sendcmdVersion="0.1.0" 
+#. "$_LIB"/ipc.bashlib
+#. "$_LIB"/ipc/file.bashlib
+#. "$_LIB"/ipc/file/sigfwd.bashlib
+#. "$_LIB"/gsatlc.bashlib
+
+#  include needed libaries
+_neededLibraries=( "ipc/file/sigfwd.bashlib"
+		   "gsatlc.bashlib" )
+
+for _library in "${_neededLibraries[@]}"; do
+
+	if ! . "$_LIB"/"$_library"; then
+		echo "[$_program] E: Library \""$_LIB"/"$_library"\" couldn't be read or is corrupted." 1>&2
+		exit $_exit_software
+	fi
+done
+
 
 ################################################################################
 
@@ -76,7 +102,7 @@ sendcmd/processMsg() {
         local _answer=$( echo "$_message" | cut -d ';' -f 1 )
         local _answerBox=$( echo "$_message" | cut -d ';' -f 2 )
 
-        echo "($$) I: answer \"$_answer\" from box \"$_answerBox\"."
+        echo "[$_program] I: answer \"$_answer\" from box \"$_answerBox\"."
 
         return
 }
@@ -151,10 +177,20 @@ sendcmd/versionMsg() {
         return
 }
 
+
+#  onExit() - perform cleanup on exit.
+sendcmd/onExit()
+{
+	#  remove message boxes
+	ipc/file/removeMsgBox "$_inbox"
+
+	return
+}
+
 ################################################################################
 
 #  setup trap to remove inbox on exit
-trap 'ipc/file/removeLocalMsgBoxByName "$_inboxName"' EXIT
+trap 'sendcmd/onExit' EXIT
 
 ################################################################################
 
@@ -189,18 +225,18 @@ while [[ "$1" != "" ]]; do
         ]]; then
 		#  no, so output a usage message
 		sendcmd/usageMsg
-		exit 1   
+		exit $_exit_usage
 	fi
 
 	#  "--help"
 	if [[ "$1" == "--help" ]]; then
 		sendcmd/helpMsg
-		exit 0
+		exit $_exit_ok
 
 	#  "--version|-V"
 	elif [[ "$1" == "--version" || "$1" == "-V" ]]; then
 		sendcmd/versionMsg
-		exit 0
+		exit $_exit_ok
 
 	#  "--command|-c command"
 	elif [[ "$1" == "--command" || "$1" == "-c" ]]; then
@@ -213,13 +249,13 @@ while [[ "$1" != "" ]]; do
                                 _commandSet="0"
                                 shift 1
                         else
-                                echo "E: missing option parameter for \"$_option\"!"
-                                exit 1
+                                echo "[$_program] E: missing option parameter for \"$_option\"!" 1>&2
+                                exit $_exit_usage
                         fi
                 else
 	                #  duplicate usage of this parameter
-	                echo "ERROR: The parameter \"--command|-c\" cannot be used multiple times!"
-	                exit 1
+	                echo "[$_program] E: The parameter \"--command|-c\" cannot be used multiple times!" 1>&2
+	                exit $_exit_usage
                 fi
 
         #  "--message-box|-m messageBox"
@@ -233,13 +269,13 @@ while [[ "$1" != "" ]]; do
                                 _messageBoxSet="0"
                                 shift 1
                         else
-                                echo "E: missing option parameter for \"$_option\"!"
-                                exit 1
+                                echo "[$_program] E: missing option parameter for \"$_option\"!" 1>&2
+                                exit $_exit_usage
                         fi
                 else
 	                #  duplicate usage of this parameter
-	                echo "ERROR: The parameter \"--message-box|-m\" cannot be used multiple times!"
-	                exit 1
+	                echo "[$_program] E: The parameter \"--message-box|-m\" cannot be used multiple times!" 1>&2
+	                exit $_exit_usage
                 fi
 
         #  "--no-sigfwd"
@@ -251,8 +287,8 @@ while [[ "$1" != "" ]]; do
                         _noSignalForwardingSet="0"
                 else
 	                #  duplicate usage of this parameter
-	                echo "ERROR: The parameter \"--no-sigfwd\" cannot be used multiple times!"
-	                exit 1
+	                echo "[$_program] E: The parameter \"--no-sigfwd\" cannot be used multiple times!" 1>&2
+	                exit $_exit_usage
                 fi
 
         #  "--no-wait-for-answer"
@@ -264,8 +300,8 @@ while [[ "$1" != "" ]]; do
                         _noWaitForAnswerSet="0"
                 else
 	                #  duplicate usage of this parameter
-	                echo "ERROR: The parameter \"--no-wait-for-answer\" cannot be used multiple times!"
-	                exit 1
+	                echo "[$_program] E: The parameter \"--no-wait-for-answer\" cannot be used multiple times!" 1>&2
+	                exit $_exit_usage
                 fi
 
         #  "--debug"
@@ -277,8 +313,8 @@ while [[ "$1" != "" ]]; do
                         _DEBUGSet="0"
                 else
 	                #  duplicate usage of this parameter
-	                echo "ERROR: The parameter \"--debug\" cannot be used multiple times!"
-	                exit 1
+	                echo "[$_program] E: The parameter \"--debug\" cannot be used multiple times!" 1>&2
+	                exit $_exit_usage
                 fi
 
         fi
@@ -293,7 +329,7 @@ if [[ $_commandSet -eq 0 && \
         :
 else
         sendcmd/usageMsg
-        exit 1
+        exit $_exit_usage
 fi
 
 ################################################################################
@@ -322,25 +358,25 @@ while [[ 1 ]]; do
     ipc/file/sendMsg "$_messageBox" "$_command;$_inbox"
     _retVal="$?"
     if [[ "$_retVal" == "0" ]]; then
-        [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: sendMsg($_command;$_inbox) successful."
+        [[ "$_DEBUG" == "1" ]] && echo "($$) [$_program] DEBUG: sendMsg($_command;$_inbox) successful." 1>&2
         touch -mc "$_messageBox"
         if [[ $_noSignalForwarding -eq 0 ]]; then
                 #  send SIGCONT to stop&go process (sputnik)
-                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: before forwardSignal()." 1>&2
+                [[ "$_DEBUG" == "1" ]] && echo "($$) [$_program] DEBUG: before forwardSignal()." 1>&2
                 ipc/file/sigfwd/forwardSignal "$_contactHostName" "$_contactPid" "SIGCONT"
                 if [[ "$?" != "0" ]]; then
                     #  signal couldn't be delivered, perhaps contact is dead
-                    echo "E: Signal forwarding to contact \"$_contactPid\" on host \"$_contactHostName\" failed. Exiting." 1>&2
+                    echo "[$_program] E: Signal forwarding to contact \"$_contactPid\" on host \"$_contactHostName\" failed. Exiting." 1>&2
                     exit 1
                 fi
         fi
         break
     elif [[ "$_retVal" == "1" ]]; then
-        [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: sendMsg($_message;$_inbox) failed."
+        [[ "$_DEBUG" == "1" ]] && echo "($$) [$_program] DEBUG: sendMsg($_message;$_inbox) failed." 1>&2
         sleep 0.5
         continue
     elif [[ "$_retVal" == "2" ]]; then
-        echo "E: Message box \"$_messageBox\" not existing." 1>&2
+        echo "[$_program] E: Message box \"$_messageBox\" not existing." 1>&2
         exit 1
     fi
 done
@@ -355,10 +391,10 @@ if [[ $_noWaitForAnswer -eq 0 ]]; then
                         _answer=$( ipc/file/receiveMsg "$_inbox" )
                         _retVal="$?"
                         if [[ "$_retVal" == "0" ]]; then
-                                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: receiveMsg($_inbox) successful."
+                                [[ "$_DEBUG" == "1" ]] && echo "($$) [$_program] DEBUG: receiveMsg($_inbox) successful." 1>&2
                                 break
                         else
-                                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: receiveMsg($_inbox) failed."
+                                [[ "$_DEBUG" == "1" ]] && echo "($$) [$_program] DEBUG: receiveMsg($_inbox) failed." 1>&2
                                 sleep 0.5
                         fi
                 else
