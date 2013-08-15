@@ -51,6 +51,10 @@ if [[ -e "/etc/gsatellite" ]]; then
 elif [[ -e "/etc/opt/gsatellite" ]]; then
         _configurationFilesPath="/etc/opt/gsatellite"
 
+# For git deploy, use $BASH_SOURCE
+elif [[ -e "$( dirname $BASH_SOURCE )/../etc" ]]; then
+	_configurationFilesPath="$( dirname $BASH_SOURCE )/../etc"
+
 #  For user install in $HOME:
 elif [[ -e "$HOME/.gsatellite" ]]; then
         _configurationFilesPath="$HOME/.gsatellite"
@@ -409,7 +413,7 @@ while [[ "$1" != "" ]]; do
                         fi
                 else
                         #  duplicate usage of this parameter
-                        echo "E: The option \"$_option\" cannot be used multiple times!"
+                        echo "[$_program] E: The option \"$_option\" cannot be used multiple times!" 1>&2
                         exit $_gqstat_exit_usage
                 fi
 
@@ -424,14 +428,14 @@ while [[ "$1" != "" ]]; do
                                 _jobStateSet="$_true"
                                 shift 1
                         else
-				echo "E: Missing argument for option \"$_option\"!"
+				echo "[$_program] E: Missing argument for option \"$_option\"!" 1>&2
 				gqstat/usageMsg
 				exit $_gqstat_exit_usage
                         fi
 
                 else
                         #  duplicate usage of this parameter
-                        echo "E: The option \"$_option\" cannot be used multiple times!"
+                        echo "[$_program] E: The option \"$_option\" cannot be used multiple times!" 1>&2
                         exit $_gqstat_exit_usage
                 fi
 	fi
