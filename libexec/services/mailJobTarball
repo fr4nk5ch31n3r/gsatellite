@@ -1,0 +1,59 @@
+#!/bin/bash
+
+#  Available environment variables provided by gsatlc:
+#+
+#+ GSAT_JOBNAME:   user specified job name
+#+
+#+ GSAT_O_WORKDIR: job's work directory
+#+
+#+ GSAT_O_HOME:    home directory of submitting user
+#+
+#+ GSAT_O_LOGNAME: name of submitting user
+#+
+#+ GSAT_O_JOBID:   job id
+#+
+#+ GSAT_O_HOST:    host on which job is currently executing
+#+
+#+ GSAT_O_PATH:    path variable used to locate executables during job execution
+
+
+#  Available environment variables provided by run-services:
+#+
+#+ GSAT_EVENT:     the triggering event
+
+
+#  Available utility/helper functions provided by run-services:
+#+
+#+ __getEmailAddress():
+#+                 returns the user provided email address.
+
+unset TMPDIR
+
+gsatTmp="$HOME/.gsatellite/tmp/"
+
+if [[ ! -e "$gsatTmp" ]]; then
+	mkdir -p "$gsatTmp"
+fi
+
+
+#  Create mail body
+#  $mailBody contains the full path to the mailbody!
+mailBody="$( mktemp -p "$gsatTmp" "${GSAT_O_JOBID}.XXXXXXXX" ).mailbody"
+cat > "$mailBody" <<-EOF
+	Event: $GSAT_EVENT 
+	Job name: $GSAT_JOBNAME
+	Job id: $GSAT_O_JOBID
+	Executed on: $GSAT_O_HOST
+EOF
+
+
+#  Create tarball of job (dir)
+#  $tarBall contains the full path to the tarball!
+jobTarball="$( mktemp -p "$gsatTmp" "${GSAT_O_JOBID}.XXXXXXXX" ).tar.gz"
+tar -czf "$jobTarball" "$GSAT_O_WORKDIR/.." &>/dev/null
+
+mail -s "[GSAT] $GSAT_O_JOBID => $GSAT_EVENT" -a "$jobTarball" $( __getEmailAddress ) < "$mailBody"
+
+rm -f "$mailBody" "$jobTarball"
+
+exit
