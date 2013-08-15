@@ -40,19 +40,19 @@ gsatellite/utils.bashlib
 gsatellite/gsatlc.bashlib
 INCLUDES
 
-_neededLibraries=(
-"${_gsatellite_libraryPrefix}/ipc/file/sigfwd.bashlib"
-"${_gsatellite_libraryPrefix}/utils.bashlib"
-"${_gsatellite_libraryPrefix}/gsatlc.bashlib"
-)
+_neededLibraries=( "ipc/file/sigfwd.bashlib"
+		   "utils.bashlib"
+		   "gsatlc.bashlib" )
 
 for _library in ${_neededLibraries[@]}; do
 
 # TODO
 # Add clause to cancel loading of library, if it was already included by another
 # library.
+#
+# => This has to be done in the library!
 
-	if ! . "$_LIB"/"$_library"; then
+	if ! . "$_LIB/${_gsatellite_libraryPrefix}/$_library"; then
 		echo "($_program) E: Library \""$_LIB"/"$_library"\" couldn't be read or is corrupted." 1>&2
 		exit 70
 	fi
@@ -63,6 +63,57 @@ done
 ################################################################################
 # FUNCTIONS
 ################################################################################
+
+# compRunning - Check if given gsat component is running (somewhere in the
+# cluster)
+#
+# @_gsatComponent: Gsatellite component to check ("gsatlc", "sigfwd")
+#
+# Returns 0 if gsat component is active, 1 if not.
+gsat/compRunning()
+{
+	local _gsatComponent="$1"
+
+	if [[ "$_gsatComponent" == "gsatlc" ]]; then
+
+		# first check if the gsatlc PID file and the file containing the
+		# corresponding hostname are existing at all
+		if [[ ! -e "$_gsatBaseDir/gsatlcHostName" ||
+		      ! -e "$_gsatBaseDir/gsatlcPid" ]]; then
+			return 1
+		else
+			local _gsatlcHostName=$( cat "$_gsatBaseDir/gsatlcHostName" )
+			local _gsatlcPid=$( cat "$_gsatBaseDir/gsatlcPid" )
+
+			local _messageBox="$_MBOXES/$_gsatlcHostName/$_gsatlcPid.inbox"
+
+			# if the PID file exists, check that the last modify is no
+			# longer ago than 5 seconds
+			local _currentTime=$( date +%s )
+			local _fileTimeOfLastModify=$( stat -c %Z "$_gsatBaseDir/gsatlcPid" )
+
+			if [[ $(( $_currentTime - $_fileTimeOfLastModify )) -gt 5 ]]; then
+				return 1
+			else
+				return 0
+			fi
+	        fi
+
+		# TODO:
+		# Interesting questions to solve:
+		# * What happens if the local node is separated from the cluster
+		#   and gsatlc is still running remotely?
+		#
+		# => Assumption: If the local node is separated from the cluster
+		#                the home filesystem is not usable at all and
+		#                hence no work can be done locally anyhow.
+
+	elif [[ "$_gsatComponent" == "sigfwd" ]]; then
+		:
+	else
+		return 1
+	fi
+}
 
 # qsub() - submit job to gsatellite
 #
@@ -160,7 +211,7 @@ gsat/qhold()
         local _jobId="$1"
 
         #  TODO:
-        #+ Only hold jobs that are in state "queued" or "running". And also
+        #+ Only hold jobs, that are in state "queued" or "running". And also
         #+ introduce second path that avoids message communication.
 
         local _tempMsgBox=$( ipc/file/createTempMsgBox )
