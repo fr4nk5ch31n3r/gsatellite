@@ -5,6 +5,7 @@
 :<<COPYRIGHT
 
 Copyright (C) 2011, 2012, 2013 Frank Scheiner
+Copyright (C) 2013 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -27,19 +28,51 @@ umask 0077
 
 _DEBUG="0"
 
-#  path to path configuration file (prefer system paths!)
-if [[ -e "/opt/gsatellite/etc/paths.conf" ]]; then
-        _pathsConfigurationFile="/opt/gsatellite/etc/paths.conf"
-#sed#elif [[ -e "<PATH_TO_GSATELLITE>/etc/paths.conf" ]]; then
-#sed#    _pathsConfigurationFile="<PATH_TO_GSATELLITE>/etc/paths.conf"
-elif [[ -e "/etc/opt/gsatellite/etc/paths.conf" ]]; then
-        _pathsConfigurationFile="/etc/opt/gsatellite/etc/paths.conf"
-elif [[ -e "$HOME/.gsatellite/paths.conf" ]]; then
-        _pathsConfigurationFile="$HOME/.gsatellite/paths.conf"
+_program=$( basename "$0" )
+
+_sendcmdVersion="0.2.0"
+
+readonly _exit_usage=64
+readonly _exit_ok=0
+readonly _exit_software=70
+
+################################################################################
+
+#  path to configuration files (prefer system paths!)
+#  For native OS packages:
+if [[ -e "/etc/gsatellite" ]]; then
+        _configurationFilesPath="/etc/gsatellite"
+
+#  For installation with "install.sh".
+#sed#elif [[ -e "<PATH_TO_GSATELLITE>/etc" ]]; then
+#sed#	_configurationFilesPath="<PATH_TO_GSATELLITE>/etc"
+
+#  According to FHS 2.3, configuration files for packages located in "/opt" have
+#+ to be placed here (if you use a provider super dir below "/opt" for the
+#+ gtransfer files, please also use the same provider super dir below
+#+ "/etc/opt").
+#elif [[ -e "/etc/opt/<PROVIDER>/gsatellite" ]]; then
+#	_configurationFilesPath="/etc/opt/<PROVIDER>/gsatellite"
+elif [[ -e "/etc/opt/gsatellite" ]]; then
+        _configurationFilesPath="/etc/opt/gsatellite"
+
+# For git deploy, use $BASH_SOURCE
+elif [[ -e "$( dirname $BASH_SOURCE )/../etc" ]]; then
+	_configurationFilesPath="$( dirname $BASH_SOURCE )/../etc"
+
+#  For user install in $HOME:
+elif [[ -e "$HOME/.gsatellite" ]]; then
+	_configurationFilesPath="$HOME/.gsatellite"
 fi
 
-#  include path config
-. "$_pathsConfigurationFile"
+_pathsConfigurationFile="$_configurationFilesPath/paths.conf"
+
+#  include path config or fail with EX_SOFTWARE = 70, internal software error
+#+ not related to OS
+if ! . "$_pathsConfigurationFile"; then
+	echo "[$_program] E: Paths configuration file couldn't be read or is corrupted." 1>&2
+	exit $_exit_software
+fi
 
 _gsatBaseDir=$HOME/.gsatellite
 _gscheduleBaseDir="$_gsatBaseDir/gschedule"
@@ -49,11 +82,26 @@ _gscheduleBaseDir="$_gsatBaseDir/gschedule"
 #  child libs inherit parent lib functions
 #. "$_LIB"/ipc.bashlib
 #. "$_LIB"/ipc/file.bashlib
-. "$_LIB/ipc/file/sigfwd.bashlib"
-. "$_LIB/ipc/file/msgproc.bashlib"
-. "$_LIB/utils.bashlib"
-. "$_LIB/gschedule.bashlib"
- 
+#. "$_LIB/ipc/file/sigfwd.bashlib"
+#. "$_LIB/ipc/file/msgproc.bashlib"
+#. "$_LIB/utils.bashlib"
+#. "$_LIB/gschedule.bashlib"
+
+#  include needed libaries
+_neededLibraries=( "ipc/file/sigfwd.bashlib"
+		   "ipc/file/msgproc.bashlib"
+		   "utils.bashlib"
+		   "gschedule.bashlib" )
+
+for _library in "${_neededLibraries[@]}"; do
+
+	if ! . "$_LIB"/"$_library"; then
+		echo "[$_program] E: Library \""$_LIB"/"$_library"\" couldn't be read or is corrupted." 1>&2
+		exit $_exit_software
+	fi
+done
+
+
 ################################################################################
 
 #  ignore SIGINT and SIGTERM
