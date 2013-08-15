@@ -1,7 +1,8 @@
 #  paths.conf - config file for needed paths
 
 #  Define basepath for gsatellite
-_GSAT_BASEPATH="<PATH_TO_GSATELLITE>"
+#_GSAT_BASEPATH="<PATH_TO_GSATELLITE>"
+_GSAT_BASEPATH="$_configurationFilesPath/.."
 
 #  Define basepath to libraries for library internal includes.
 _LIB="$_GSAT_BASEPATH/lib"
@@ -9,6 +10,9 @@ _LIB="$_GSAT_BASEPATH/lib"
 #  Define libexec path
 _GSAT_LIBEXECPATH="$_GSAT_BASEPATH/libexec"
 
+# Basepath for all gsatellite activities
+_gsatBaseDir="$HOME/.gsatellite"
+
 #  Message boxes are usually stored in the user's home directory
-_MBOXES="$HOME/.gsatellite/mboxes"
+_MBOXES="$_gsatBaseDir/mboxes"
 
