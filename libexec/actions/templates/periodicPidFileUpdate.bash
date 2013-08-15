@@ -14,7 +14,7 @@ __action()
 	
 	if kill -0 $_pid &>/dev/null; then
 
-		touch "$_pidFile"
+		touch -m "$_pidFile"
 		return
 	else
 		return 1
