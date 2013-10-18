@@ -27,6 +27,8 @@
 #+ __getEmailAddress():
 #+                 returns the user provided email address.
 
+umask 0077
+
 #  Create mail body
 cat > /tmp/${GSAT_O_LOGNAME}_${GSAT_O_JOBID}.mailbody <<-EOF
 	Event: $GSAT_EVENT 

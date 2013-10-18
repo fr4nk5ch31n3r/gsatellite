@@ -27,6 +27,8 @@
 #+ __getEmailAddress():
 #+                 returns the user provided email address.
 
+umask 0077
+
 unset TMPDIR
 
 gsatTmp="$HOME/.gsatellite/tmp/"
