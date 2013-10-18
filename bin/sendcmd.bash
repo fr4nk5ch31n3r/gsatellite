@@ -30,7 +30,7 @@ _DEBUG="0"
 
 _program=$( basename "$0" )
 
-_sendcmdVersion="0.2.0"
+_sendcmdVersion="0.3.0"
 
 readonly _exit_usage=64
 readonly _exit_ok=0
@@ -102,7 +102,11 @@ sendcmd/processMsg() {
         local _answer=$( echo "$_message" | cut -d ';' -f 1 )
         local _answerBox=$( echo "$_message" | cut -d ';' -f 2 )
 
-        echo "[$_program] I: answer \"$_answer\" from box \"$_answerBox\"."
+        if [[ $_DEBUG -eq 1 ]]; then
+        	echo "[$_program] I: answer \"$_answer\" from box \"$_answerBox\"."
+        else
+        	echo "$_answer"
+        fi
 
         return
 }
