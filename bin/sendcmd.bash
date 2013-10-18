@@ -159,7 +159,8 @@ OPTIONS:
 -m, --message-box messageBox
                         Specify the message box to send the command to.
 
-[--no-sigfwd]           Disable signal forwarding during send.
+[--no-sigfwd]           Disable signal forwarding during send (e.g. when
+                        contacting the signal forwarder (sigfwd) itself)
 
 [--no-wait-for-answer]  Don't wait for an answer after sending a command.
 
