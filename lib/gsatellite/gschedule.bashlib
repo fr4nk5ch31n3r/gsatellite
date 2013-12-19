@@ -82,7 +82,7 @@ _gschedule_errorInvalidJobId="67"
 if [[ ! -e "$_gscheduleBaseDir" ]]; then
     #  create base dir and job dirs
     mkdir -p "$_gscheduleBaseDir" &>/dev/null || \
-    utils/exit "E: Cannot create \"$_gscheduleBaseDir\"! Exiting." "$_errCannotCreateBaseDir"
+    utils/exit "($$) [gsatlc::gschedule] E: Cannot create \"$_gscheduleBaseDir\"! Exiting." "$_errCannotCreateBaseDir" 1>&2
     _oldPwd="$PWD"
     cd "$_gscheduleBaseDir"
     mkdir "$_gscheduleRunningDir" \
@@ -91,7 +91,7 @@ if [[ ! -e "$_gscheduleBaseDir" ]]; then
           "$_gscheduleHeldDir" \
 	  "$_gscheduleQueuedDir" \
 	  "$_gscheduleJobsDir" &>/dev/null || \
-    utils/exit "E: Cannot create job directories! Exiting." "$_errCannotCreateJobDirs"
+    utils/exit "($$) [gsatlc::gschedule] E: Cannot create job directories! Exiting." "$_errCannotCreateJobDirs" 1>&2
 
     #  initialize job id source
     echo "0" > "$_gscheduleJobIdSource"
@@ -138,7 +138,7 @@ gschedule/handleTerminatedJob() {
 	local _jobType=$( jobTypes/getJobType "$_job" )
 	
 	local _action=$( jobTypes/${_jobType}/evaluateExitValue "$_jobExitValue" )
-	echo "($$) [DEBUG] _jobId=\"$_jobId\",_jobExitValue=\"$_jobExitValue\",_jobType=\"$_jobType\",_action=\"$_action\"" 1>&2
+	echo "($$) [gsatlc::gschedule] DEBUG: _jobId=\"$_jobId\",_jobExitValue=\"$_jobExitValue\",_jobType=\"$_jobType\",_action=\"$_action\"" 1>&2
 
 	if [[ "$_action" == "RESTART" ]]; then
 
@@ -373,11 +373,11 @@ gschedule/holdJob() {
 
         #  if job is running, 
         if gschedule/isRunningJob "$_jobId"; then
-        	echo "($$) DEBUG: Is running job!"
+		echo "($$) [gsatlc::gschedule] DEBUG: Is running job!"
                 #  create temporary message box
                 local _tempMsgBox=$( ipc/file/createTempMsgBox )
 
-		echo "($$) DEBUG: holdJob() _tempMsgBox=\"$_tempMsgBox\""
+		echo "($$) [gsatlc::gschedule] DEBUG: holdJob() _tempMsgBox=\"$_tempMsgBox\""
 
                 #  get corresponding satellite (sputnik)
                 local _sputnikPid=$( cat "$_jobDir/sputnik.pid" )
@@ -388,20 +388,20 @@ gschedule/holdJob() {
 
                 #  send "HOLD" message to sputnik
                 if ! ipc/file/sendMsg "$_sputnikMessageBox" "$_message"; then
-                        echo "E: ipc/file/sendMsg() failed!" 1>&2
+                        echo "($$) [gsatlc::gschedule] E: ipc/file/sendMsg() failed!" 1>&2
                         return 1
                 fi
 
-		echo "($$) DEBUG: After sendMsg()!"
+		echo "($$) [gsatlc::gschedule] DEBUG: After sendMsg()!"
 
                 #  wake up sputnik
                 local _signal="SIGCONT"
 
                 #  wake sputnik with signal forwarding
                 ipc/file/sigfwd/forwardSignal "$_sputnikHostname" "$_sputnikPid" "$_signal" || \
-                (echo "E: ipc/file/sigfwd/forwardSignal() failed!" 1>&2 && return 1)
+                (echo "($$) [gsatlc::gschedule] E: ipc/file/sigfwd/forwardSignal() failed!" 1>&2 && return 1)
 
-		echo "($$) DEBUG: After forwardSignal()!"
+		echo "($$) [gsatlc::gschedule] DEBUG: After forwardSignal()!"
 
                 #  receive acknowledgement
                 local _receivedMessage=""
@@ -416,7 +416,7 @@ gschedule/holdJob() {
                                 _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
 
                                 if [[ $? -eq 0 ]]; then
-                                        echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
+                                        echo "($$) [gsatlc::gschedule] DEBUG: _receivedMessage=\"$_receivedMessage\""
                                         break
                                 fi
                         else
@@ -459,7 +459,7 @@ gschedule/holdJob() {
 
 
 gschedule/releaseJob() {
-        #  hold the job with the given job id
+        #  release the job with the given job id
         #
         #  usage:
         #+ gschedule/releaseJob jobId
