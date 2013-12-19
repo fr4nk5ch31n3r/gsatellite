@@ -3,6 +3,7 @@
 :<<COPYRIGHT
 
 Copyright (C) 2012 Frank Scheiner
+Copyright (C) 2013 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -39,7 +40,7 @@ INCLUDE
 #  VARIABLES
 ################################################################################
 
-readonly _jobTypes_version="0.1.0"
+readonly _jobTypes_version="0.2.0"
 
 
 ################################################################################
@@ -90,6 +91,17 @@ jobTypes/getJobType()
 
 	echo "$_jobType"
 
+	return
+}
+
+
+jobTypes/getHoldSignal()
+{
+	local _job="$1"
+	local _jobType=$( jobTypes/getJobType "$_job" )
+	
+	jobTypes/$_jobType/getHoldSignal
+	
 	return
 }
 

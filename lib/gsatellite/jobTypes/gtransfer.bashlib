@@ -49,6 +49,14 @@ _jobTypes_gtransfer_holdSignal="SIGINT"
 FUNCTIONS
 
 
+jobTypes/gtransfer/getHoldSignal()
+{
+	echo "$_jobTypes_gtransfer_holdSignal"
+	
+	return
+}
+
+
 jobTypes/gtransfer/evaluateExitValue()
 {
 	#  evaluate exit value of gtransfer job and echo matching action

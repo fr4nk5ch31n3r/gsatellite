@@ -124,8 +124,8 @@ sputnik/holdJob() {
 	#+ the scheduler (gsatlc)
         #local _jobType=$( cat "$_jobTmpDir/../job.type" )
 
-	#local _holdSignal=$( sputnik/getHoldSignal "$_jobType" )
-	local _holdSignal="SIGINT"
+	local _holdSignal=$( jobTypes/getHoldSignal "$_job" )
+	#local _holdSignal="SIGINT"
 	
 	#  "hold" job
 	#  NOTICE: There's a "-" in front of the PID. This results in signalling
