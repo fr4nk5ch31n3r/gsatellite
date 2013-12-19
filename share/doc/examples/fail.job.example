@@ -1,0 +1,6 @@
+
+sleep 20
+
+/bin/false
+
+exit
