@@ -152,6 +152,7 @@ sputnik/runJob() {
         local _job="$1"
         local _parentPid="$2"
         local _parentInbox="$3"
+        local _message=""
 
         local _jobTmpDir=$( dirname "$_job" )
         
@@ -193,7 +194,19 @@ sputnik/runJob() {
 	date +%s >> "$_jobDir/job.start"
 
         #  save job's PID
-        echo "$_jobPid" > "$__GLOBAL__jobPidFile"	
+        echo "$_jobPid" > "$__GLOBAL__jobPidFile"
+
+	_message="STARTED;"
+
+	ipc/file/sendMsg "$_parentInbox" "$_message"
+
+        #  wakeup parent
+        /bin/kill -SIGCONT $_parentPid &>/dev/null
+
+	# return false if `kill` failed?
+        #if [[ "$?" != "0" ]]; then
+	#	return 1
+        #fi
 
         #  wait for the job to terminate
         wait "$_jobPid"
@@ -207,7 +220,7 @@ sputnik/runJob() {
 	echo "$_jobExitValue" > "$_jobDir/job.exit"
 
         #  no answer from the parent needed, hence no inbox provided
-        local _message="TERMINATED $_jobExitValue;"
+        _message="TERMINATED $_jobExitValue;"
 
         ipc/file/sendMsg "$_parentInbox" "$_message"
 
@@ -242,6 +255,26 @@ processMsg() {
         if [[ "$_command" =~ '^WAKE UP$' ]]; then
                 #echo "sputnik: awake!"
                 return
+
+	elif [[ "$_command" =~ ^STARTED.* ]]; then
+
+		#  command is "STARTED JOB"
+	        local _gsatlcMessage="STARTED $__GLOBAL__jobId;$_inbox"
+
+	        ipc/file/sendMsg "$_gsatlcMessageBox" "$_gsatlcMessage"
+
+	        local _signal="SIGCONT"
+
+	        #  wake gsatlc with signal forwarding
+	        ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal"
+
+		local _returnValue="$?"
+
+	        if [[ $_returnValue -eq 0 ]]; then
+			return 0
+		else
+			return 1
+	        fi
 
         elif [[ "$_command" =~ ^TERMINATED.* ]]; then
         	#  only do something if job is not held

@@ -3,6 +3,7 @@
 :<<COPYRIGHT
 
 Copyright (C) 2012 Frank Scheiner
+Copyright (C) 2013 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -129,23 +130,44 @@ gsatlc/processMsg()
 
                 return
 
+	# event: JOB_START
+	elif [[ "$_command" =~ ^STARTED.* ]]; then
+		#  _command is "STARTED <JOB_ID>"
+                local _jobId=$( echo "$_command" | cut -d ' ' -f 2 )
+
+		# Notification
+		echo "($$) [gsatlc] DEBUG: Before onEvent() $( date +%s)" 1>&2
+
+		echo "($$) [gsatlc] DEBUG: _jobId=\"$_jobId\"" 1>&2
+
+		local _environment=$( gschedule/getJobDir "$_jobId" )"/${_gschedule_jobEnvFileName}"
+
+		echo "($$) [gsatlc] DEBUG: _environment=\"$_environment\"" 1>&2
+
+		gschedule/onEvent "JOB_START" "$_environment" &
+
+		echo "($$) [gsatlc] DEBUG: After onEvent() $( date +%s)" 1>&2
+
+		return
+
         #  event: JOB_TERMINATION
         elif [[ "$_command" =~ ^TERMINATED.* ]]; then
                 #  _command is "TERMINATED <JOB_ID> <EXIT_VALUE>"
                 local _jobId=$( echo "$_command" | cut -d ' ' -f 2 )
                 local _jobExitValue=$( echo "$_command" | cut -d ' ' -f 3 )
 
-		echo "($$) DEBUG: Before onEvent() $( date +%s)" 1>&2
+		# Notification
+		echo "($$) [gsatlc] DEBUG: Before onEvent() $( date +%s)" 1>&2
 
-		echo "($$) DEBUG: _jobId=\"$_jobId\"" 1>&2
+		echo "($$) [gsatlc] DEBUG: _jobId=\"$_jobId\"" 1>&2
 
 		local _environment=$( gschedule/getJobDir "$_jobId" )"/${_gschedule_jobEnvFileName}"
 
-		echo "($$) DEBUG: _environment=\"$_environment\"" 1>&2
+		echo "($$) [gsatlc] DEBUG: _environment=\"$_environment\"" 1>&2
 
 		gschedule/onEvent "JOB_TERMINATION" "$_environment" &
 
-		echo "($$) DEBUG: After onEvent() $( date +%s)" 1>&2
+		echo "($$) [gsatlc] DEBUG: After onEvent() $( date +%s)" 1>&2
 
                 #  check if job is/was in running state
                 if gschedule/isRunningJob "$_jobId"; then
