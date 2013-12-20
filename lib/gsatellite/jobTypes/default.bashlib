@@ -45,7 +45,7 @@ _jobTypes_default_holdSignal="SIGTERM"
 FUNCTIONS
 
 
-jobTypes/gtransfer/getHoldSignal()
+jobTypes/default/getHoldSignal()
 {
 	echo "$_jobTypes_default_holdSignal"
 	
