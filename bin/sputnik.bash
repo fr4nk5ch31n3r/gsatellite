@@ -30,7 +30,7 @@ _DEBUG="0"
 
 _program=$( basename "$0" )
 
-_sendcmdVersion="0.2.0"
+_sputnikVersion="0.3.0"
 
 readonly _exit_usage=64
 readonly _exit_ok=0
@@ -70,7 +70,7 @@ _pathsConfigurationFile="$_configurationFilesPath/paths.conf"
 #  include path config or fail with EX_SOFTWARE = 70, internal software error
 #+ not related to OS
 if ! . "$_pathsConfigurationFile"; then
-	echo "[$_program] E: Paths configuration file couldn't be read or is corrupted." 1>&2
+	echo "($$) [$_program] E: Paths configuration file couldn't be read or is corrupted." 1>&2
 	exit $_exit_software
 fi
 
@@ -96,7 +96,7 @@ _neededLibraries=( "ipc/file/sigfwd.bashlib"
 for _library in "${_neededLibraries[@]}"; do
 
 	if ! . "$_LIB"/"$_library"; then
-		echo "[$_program] E: Library \""$_LIB"/"$_library"\" couldn't be read or is corrupted." 1>&2
+		echo "($$) [$_program] E: Library \""$_LIB"/"$_library"\" couldn't be read or is corrupted." 1>&2
 		exit $_exit_software
 	fi
 done
@@ -105,8 +105,8 @@ done
 ################################################################################
 
 #  ignore SIGINT and SIGTERM
-trap 'echo "($$) DEBUG: SIGINT received." >> "$__GLOBAL__sputnikLogFile"' SIGINT
-trap 'echo "($$) DEBUG: SIGTERM received." >> "$__GLOBAL__sputnikLogFile"' SIGTERM
+trap 'echo "($$) [sputnik] DEBUG: SIGINT received." >> "$__GLOBAL__sputnikLogFile"' SIGINT
+trap 'echo "($$) [sputnik] DEBUG: SIGTERM received." >> "$__GLOBAL__sputnikLogFile"' SIGTERM
 
 sputnik/holdJob() {
         #  Put a hold on a job
@@ -127,15 +127,27 @@ sputnik/holdJob() {
 	local _holdSignal=$( jobTypes/getHoldSignal "$_job" )
 	#local _holdSignal="SIGINT"
 	
+	echo "($$) [sputnik] DEBUG: /bin/kill -"$_holdSignal" -"$_jobChildPid"" >> "$__GLOBAL__sputnikLogFile"
+	
 	#  "hold" job
 	#  NOTICE: There's a "-" in front of the PID. This results in signalling
 	#+ the whole process group of sputnik. All sputnik processes should
 	#+ ignore SIGINT, but the children of the job child should react on
 	#+ this.
-	echo /bin/kill -"$_holdSignal" -"$$" >&2 #&>/dev/null
-        /bin/kill -"$_holdSignal" -"$$" #&>/dev/null
+	#echo /bin/kill -"$_holdSignal" -"$$" >&2 #&>/dev/null
+        /bin/kill -"$_holdSignal" -"$_jobChildPid" 1>> "$__GLOBAL__sputnikLogFile" 2>&1
+        #/bin/kill -SIGINT -"$$"
 
-        if [[ "$?" == "0" ]]; then
+	#wait
+
+	local _returnVal=$?
+	
+	echo "($$) [sputnik] DEBUG: _returnVal=\"$_returnVal\"" >> "$__GLOBAL__sputnikLogFile"
+	
+	# Remove after testing
+	#return 0
+
+        if [[ "$_returnVal" == "0" ]]; then
                 return 0
         else
                 return 1
@@ -153,6 +165,19 @@ sputnik/runJob() {
         local _parentPid="$2"
         local _parentInbox="$3"
         local _message=""
+
+	########################################################################
+	# notify parent of own PID (as runJob is started with `setsid` the
+	# parent looses track of the child)
+	local _self="$$"
+	
+	_message="JOB_CHILD_PID $_self;"
+
+	ipc/file/sendMsg "$_parentInbox" "$_message"
+
+        #  wakeup parent
+        /bin/kill -SIGCONT $_parentPid &>/dev/null
+	########################################################################
 
         local _jobTmpDir=$( dirname "$_job" )
         
@@ -256,6 +281,14 @@ processMsg() {
                 #echo "sputnik: awake!"
                 return
 
+	elif [[ "$_command" =~ ^JOB_CHILD_PID.* ]]; then
+
+		echo "($$) [sputnik] DEBUG: _command=\"$_command\"" >> "$__GLOBAL__sputnikLogFile"
+		# save PID of job child
+		_jobChildPid=$( echo "$_command" | cut -d ' ' -f 2 )
+		
+		return
+
 	elif [[ "$_command" =~ ^STARTED.* ]]; then
 
 		#  command is "STARTED JOB"
@@ -329,9 +362,9 @@ processMsg() {
                 #ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal"
 
                 if [[ "$?" == "0" ]]; then
-                        return 0
+                        exit 0
                 else
-                        return 1
+                        exit 1
                 fi
 
         fi
@@ -359,6 +392,11 @@ touch "$__GLOBAL__sputnikLogFile"
 
 _jobHeld=0
 
+_wakeupChildPid=""
+_jobChildPid=""
+
+################################################################################
+
 #if [[ ! -e "$_job" ]]; then
 #	exit 1
 #fi
@@ -381,11 +419,18 @@ utils/wakeUp "$_self" "10" &
 #  child's PID
 _wakeupChildPid="$!"
 
-#  start job
-sputnik/runJob "$_job" "$_self" "$_inbox" &
+#  start job (job child will send its PID in a message)
+#sputnik/runJob "$_job" "$_self" "$_inbox" &
+
+echo "($$) [sputnik] DEBUG: nohup setsid runJob "$_job" "$__GLOBAL__jobId" "$_self" "$_inbox" &"  >> "$__GLOBAL__sputnikLogFile"
+
+# nohup needs a file/binary and does not work with funtions!
+nohup setsid sputnikRunJob "$_job" "$__GLOBAL__jobId" "$_self" "$_inbox" &
+
+echo "($$) [sputnik] DEBUG: Forked job child." >> "$__GLOBAL__sputnikLogFile"
 
 #  child's PID
-_jobChildPid="$!"
+#_jobChildPid="$!"
 
 #  save PID
 echo "$_self" > "$_jobDir/sputnik.pid"
