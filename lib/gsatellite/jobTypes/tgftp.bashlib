@@ -1,0 +1,65 @@
+#  jobTypes/tgftp.bashlib - job type definitions for tgftp job
+
+:<<COPYRIGHT
+
+Copyright (C) 2013 Frank Scheiner, HLRS, Universitaet Stuttgart
+
+The program is distributed under the terms of the GNU General Public License
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+COPYRIGHT
+
+################################################################################
+#  INCLUDES
+################################################################################
+
+:<<INCLUDE
+INCLUDE
+
+################################################################################
+#  VARIABLES
+################################################################################
+
+readonly _jobTypes_tgftp_version="0.1.0"
+
+_jobTypes_tgftp_holdSignal="SIGINT"
+
+################################################################################
+#  FUNCTIONS
+################################################################################
+
+:<<FUNCTIONS
+FUNCTIONS
+
+
+jobTypes/tgftp/getHoldSignal()
+{
+	echo "$_jobTypes_tgftp_holdSignal"
+	
+	return
+}
+
+
+jobTypes/tgftp/evaluateExitValue()
+{
+	#  evaluate exit value of job and echo matching action
+	local _exitValue="$1"
+		
+	#  always terminate
+	echo "TERMINATE"
+
+	return
+}
+
