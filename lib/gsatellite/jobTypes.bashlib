@@ -33,14 +33,22 @@ INCLUDE
 
 #_LIB="./"
 
-. "$_LIB/jobTypes/default.bashlib"
-. "$_LIB/jobTypes/gtransfer.bashlib"
+#. "$_LIB/jobTypes/default.bashlib"
+#. "$_LIB/jobTypes/gtransfer.bashlib"
+#. "$_LIB/jobTypes/tgftp.bashlib"
+
+# source new libs automatically
+for _lib in $_LIB/jobTypes/*.bashlib; do
+
+	. $_lib
+done
+
 
 ################################################################################
 #  VARIABLES
 ################################################################################
 
-readonly _jobTypes_version="0.2.0"
+readonly _jobTypes_version="0.3.0"
 
 
 ################################################################################
@@ -101,7 +109,7 @@ jobTypes/getHoldSignal()
 	local _jobType=$( jobTypes/getJobType "$_job" )
 	
 	jobTypes/$_jobType/getHoldSignal
-	
+
 	return
 }
 
