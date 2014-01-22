@@ -5,7 +5,7 @@
 :<<COPYRIGHT
 
 Copyright (C) 2012 Frank Scheiner
-Copyright (C) 2013 Frank Scheiner, HLRS, Universitaet Stuttgart
+Copyright (C) 2013, 2014 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -30,7 +30,7 @@ _DEBUG="0"
 
 _program=$( basename "$0" )
 
-_notificationEmailAddress="$HOME/.gsatellite/myEmailAddress"
+export _notificationEmailAddress="$HOME/.gsatellite/myEmailAddress"
 
 ################################################################################
 #  FUNCTIONS
