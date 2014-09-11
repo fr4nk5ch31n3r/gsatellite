@@ -343,28 +343,6 @@ gqstat/getJobAttribute()
 }
 
 
-gqstat/qstat()
-{
-        #  show info about jobs
-        #
-        #  usage:
-        #+ gsatctl/qstat [jobState]
-        local _jobState="$1"
-
-        if [[ "$_jobState" == "" ]]; then
-                gsatctl/listAllJobs
-        elif [[ "$_jobState" == "ready" || \
-                "$_jobState" == "running" || \
-                "$_jobState" == "finished" || \
-                "$_jobState" == "failed" ]]; then
-                gsatctl/listJobsInState "$_jobState"
-        else
-                return 1
-        fi
-
-        return    
-
-}
 
 ################################################################################
 # MAIN
