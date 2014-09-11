@@ -206,8 +206,8 @@ gqstat/listJobsInState()
                 local _jobHost=$( cat "$_gscheduleBaseDir/jobs/$_jobDir/job.execHost" 2>/dev/null )
                 local _jobName=$( basename $( readlink "$_gscheduleBaseDir/$_jobState/$_jobDir/$_jobId" ) )
 
-                # left-bound text output ("-"!)
-                printf '%-12s\t%-12s\t%-12s\t%-12s\n' "$_jobState" "$_jobId" "$_jobHost" "$_jobName"
+                # left-bound text output ("-"!) and truncate values to 12 chars
+                printf '%-.12s\t%-.12s\t%-.12s\t%-.12s\n' "${_jobState::12}" "${_jobId::12}" "${_jobHost::12}" "${_jobName::12}"
         done
 
         return
@@ -237,8 +237,8 @@ gqstat/listAllJobs()
                 local _jobHost=$( cat "$_gscheduleBaseDir/jobs/$_jobDir/job.execHost" 2>/dev/null )
                 local _jobName=$( basename $( readlink "$_gscheduleBaseDir/jobs/$_jobDir/$_jobId" ) )
 
-                # left-bound text output ("-"!)
-                printf '%-12s\t%-12s\t%-12s\t%-12s\n' "$_jobState" "$_jobId" "$_jobHost" "$_jobName"
+                # left-bound text output ("-"!) and truncate values to 12 chars
+                printf '%-12s\t%-12s\t%-12s\t%-12s\n' "${_jobState::12}" "${_jobId::12}" "${_jobHost::12}" "${_jobName::12}"
         done
 
         return
