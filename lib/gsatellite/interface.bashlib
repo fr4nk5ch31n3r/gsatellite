@@ -418,7 +418,7 @@ gsatellite/interface/listJobsInState()
 {
         local _jobState="$1"
 
-        #  right-bound text ouptut (default!)
+        #  right-bound text output (default!)
         printf "%12s %12s %12s %12s\n" "job.state" "job.id" "job.execHost" "job.name"
         echo -e "------------ ------------ ------------ ------------"
 
@@ -446,7 +446,7 @@ gsatellite/interface/listAllJobs()
 {
         #  perhaps locking needed before listing?
 
-        #  right-bound text ouptut (default!)
+        #  right-bound text output (default!)
         printf "%12s %12s %12s %12s\n" "job.state" "job.id" "job.execHost" "job.name"
         echo -e "------------ ------------ ------------ ------------"
 
