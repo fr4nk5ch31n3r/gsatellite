@@ -1,12 +1,12 @@
 #!/bin/bash
 
-#  gqstat - gqstat implementation as separate program with additional
-#+ functionality
+# gqstat - gqstat implementation as separate program with additional
+# functionality
 
 :<<COPYRIGHT
 
 Copyright (C) 2013 Frank Scheiner
-Copyright (C) 2013 Frank Scheiner, HLRS, Universitaet Stuttgart
+Copyright (C) 2013, 2014 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -27,54 +27,68 @@ COPYRIGHT
 
 umask 0077
 
+################################################################################
+# VARIABLES
+################################################################################
+
 _DEBUG="0"
 
-_program=$( basename "$0" )
+readonly _program=$( basename "$0" )
+readonly _gqstatVersion="0.2.0"
 
 ################################################################################
 
-#  path to configuration files (prefer system paths!)
-#  For native OS packages:
+# path to configuration files (prefer system paths!)
+# For native OS packages:
 if [[ -e "/etc/gsatellite" ]]; then
-        _configurationFilesPath="/etc/gsatellite"
+	_configurationFilesPath="/etc/gsatellite"
+	_installBasePath="/usr"
+	_libBasePath="$_installBasePath/share"
+	_libexecBasePath="$_installBasePath/libexec/gsatellite"
 
-#  For installation with "install.sh".
+# For installation with "install.sh".
 #sed#elif [[ -e "<PATH_TO_GSATELLITE>/etc" ]]; then
 #sed#	_configurationFilesPath="<PATH_TO_GSATELLITE>/etc"
 
-#  According to FHS 2.3, configuration files for packages located in "/opt" have
-#+ to be placed here (if you use a provider super dir below "/opt" for the
-#+ gtransfer files, please also use the same provider super dir below
-#+ "/etc/opt").
+# According to FHS 2.3, configuration files for packages located in "/opt" have
+# to be placed here (if you use a provider super dir below "/opt" for the
+# gtransfer files, please also use the same provider super dir below "/etc/opt".
 #elif [[ -e "/etc/opt/<PROVIDER>/gsatellite" ]]; then
 #	_configurationFilesPath="/etc/opt/<PROVIDER>/gsatellite"
+#	_configurationFilesPath="/etc/opt/<PROVIDER>/gsatellite"
+#	_installBasePath="/opt/<PROVIDER>/gsatellite"
+#	_libBasePath="$_installBasePath/lib"
+#	_libexecBasePath="$_installBasePath/libexec"
 elif [[ -e "/etc/opt/gsatellite" ]]; then
-        _configurationFilesPath="/etc/opt/gsatellite"
+	_configurationFilesPath="/etc/opt/gsatellite"
+	_installBasePath="/opt/gsatellite"
+	_libBasePath="$_installBasePath/lib"
+	_libexecBasePath="$_installBasePath/libexec"
 
 # For git deploy, use $BASH_SOURCE
 elif [[ -e "$( dirname $BASH_SOURCE )/../etc" ]]; then
 	_configurationFilesPath="$( dirname $BASH_SOURCE )/../etc"
-
-#  For user install in $HOME:
-elif [[ -e "$HOME/.gsatellite" ]]; then
-        _configurationFilesPath="$HOME/.gsatellite"
+	_installBasePath="$( dirname $BASH_SOURCE )/../"
+	_libBasePath="$_installBasePath/lib"
+	_libexecBasePath="$_installBasePath/libexec"
 fi
 
 _pathsConfigurationFile="$_configurationFilesPath/paths.conf"
 
-#  include path config or fail with EX_SOFTWARE = 70, internal software error
-#+ not related to OS
+# include path config or fail with EX_SOFTWARE = 70, internal software error not
+# related to OS
 if ! . "$_pathsConfigurationFile"; then
 	echo "($_program) E: Paths configuration file couldn't be read or is corrupted." 1>&2
 	exit 70
 fi
 
+readonly _LIB="$_libBasePath"
+readonly _GSAT_LIBEXECPATH="$_libexecBasePath"
+
 ################################################################################
 
-_gsatBaseDir=$HOME/.gsatellite
+_gsatBaseDir="$HOME/.gsatellite"
 _gscheduleBaseDir="$_gsatBaseDir/gschedule"
-_gqstatVersion="0.1.0"
-
 
 readonly _gqstat_exit_usage=64
 readonly _gqstat_exit_ok=0
@@ -91,12 +105,20 @@ readonly __GLOBAL__jobAttributes=( "job.id"
                                    "job.start"
                                    "job.stop" )
 
+################################################################################
+# INCLUDE LIBRARY FUNCTIONS
+################################################################################
 
-#  include needed libaries
-_neededLibraries=( "gschedule.bashlib"
-		   "utils.bashlib" )
+# include needed libaries
+_neededLibraries=( "gsatellite/gschedule.bashlib"
+		   "gsatellite/utils.bashlib" )
 
 for _library in "${_neededLibraries[@]}"; do
+
+	#_libraryPrefix=${_library%%/*}
+	#_libraryNameTmp=${_library#*/}
+	#_libraryNameTmp=${_libraryNameTmp%.*}
+	#_libraryNameTmp=${_
 
 	if ! . "$_LIB"/"$_library"; then
 		echo "($_program) E: Library \""$_LIB"/"$_library"\" couldn't be read or is corrupted." 1>&2
@@ -105,55 +127,51 @@ for _library in "${_neededLibraries[@]}"; do
 done
 
 ################################################################################
-
+# FUNCTIONS
+################################################################################
 
 gqstat/usageMsg()
 {
 
-    cat <<-USAGE
+	cat >&2 <<-USAGE
+	usage: $_program [-f [jobId]] [-s jobState]
+	Try \`$_program --help' for more information.
+	USAGE
 
-usage: gqstat [-f [jobId]] [-s jobState]
-
---help gives more information
-
-USAGE
-
-    return
+	return
 }
 
 
 gqstat/helpMsg()
 {
     
-    cat <<-HELP
+	cat <<-HELP
+	$( gqstat/versionMsg )
 
-$( gqstat/versionMsg )
+	SYNOPSIS:
 
-SYNOPSIS:
+	gqstat [options]
 
-gqstat [options]
+	DESCRIPTION:
 
-DESCRIPTION:
+	gqstat is part of the user interface to gsatellite. It provides status and
+	general information about gsatellite jobs.
 
-gqstat is part of the user interface to gsatellite. It provides status and
-general information about gsatellite jobs.
+	OPTIONS:
 
-OPTIONS:
+	[-f, --detailed-listing [jobId]]
+				List all available information about jobs or about a
+				specific job if a job id is given.
 
-[-f, --detailed-listing [jobId]]
- 			List all available information about jobs or about a
- 			specific job if a job id is given.
-			
-[-s, --job-state jobState]
- 			Filter listing by given job state.
+	[-s, --job-state jobState]
+				Filter listing by given job state.
 
-[-V, --version]         Display version information and exit.
+	[-V, --version]         Display version information and exit.
 
-Without arguments gqstat prints general information about all jobs.
+	Without arguments gqstat prints general information about all jobs.
+	HELP
 
-HELP
-
-    return
+	return
 }
 
 
@@ -175,7 +193,7 @@ gqstat/listJobsInState()
 
         local _jobState="$1"
 
-        #  right-bound text ouptut (default!)
+        # right-bound text ouptut (default!)
         printf "%12s\t%12s\t%12s\t%12s\n" "job.state" "job.id" "job.execHost" "job.name"
         echo -e "------------\t------------\t------------\t------------"
 
@@ -188,14 +206,9 @@ gqstat/listJobsInState()
                 local _jobHost=$( cat "$_gscheduleBaseDir/jobs/$_jobDir/job.execHost" 2>/dev/null )
                 local _jobName=$( basename $( readlink "$_gscheduleBaseDir/$_jobState/$_jobDir/$_jobId" ) )
 
-                #  left-bound text output ("-"!)
-                printf '%-12s\t%-12s\t%-12s\t%-12s\n' "$_jobState" "$_jobId" "$_jobHost" "$_jobName" #>> tmpfile
-
+                # left-bound text output ("-"!)
+                printf '%-12s\t%-12s\t%-12s\t%-12s\n' "$_jobState" "$_jobId" "$_jobHost" "$_jobName"
         done
-
-        if [[ -e tmpfile ]]; then
-                cat tmpfile && rm tmpfile
-        fi
 
         return
 }
@@ -208,9 +221,9 @@ gqstat/listAllJobs()
         #  usage:
         #+ gsatlc/listAllJobs
 
-        #  perhaps locking needed before listing?
+        # perhaps locking needed before listing?
 
-        #  right-bound text ouptut (default!)
+        # right-bound text ouptut (default!)
         printf "%12s\t%12s\t%12s\t%12s\n" "job.state" "job.id" "job.execHost" "job.name"
         echo -e "------------\t------------\t------------\t------------"
 
@@ -224,14 +237,9 @@ gqstat/listAllJobs()
                 local _jobHost=$( cat "$_gscheduleBaseDir/jobs/$_jobDir/job.execHost" 2>/dev/null )
                 local _jobName=$( basename $( readlink "$_gscheduleBaseDir/jobs/$_jobDir/$_jobId" ) )
 
-                #  left-bound text output ("-"!)
-                printf '%-12s\t%-12s\t%-12s\t%-12s\n' "$_jobState" "$_jobId" "$_jobHost" "$_jobName" #>> tmpfile
-
+                # left-bound text output ("-"!)
+                printf '%-12s\t%-12s\t%-12s\t%-12s\n' "$_jobState" "$_jobId" "$_jobHost" "$_jobName"
         done
-
-        if [[ -e tmpfile ]]; then
-                cat tmpfile && rm tmpfile
-        fi
 
         return
 }
@@ -250,7 +258,7 @@ gqstat/listJobDetailed()
 	
 		if [[ -s "$_jobAttributeFile" ]]; then
 	
-			#  NOTICE: Command substitution removes trailing newlines
+			# NOTICE: Command substitution removes trailing newlines
 			echo "${_jobAttribute}=\"$( cat "$_jobAttributeFile" )\"" 
 	
 		elif [[ "$_jobAttribute" == "job.dir" &&\
@@ -275,7 +283,7 @@ gqstat/getJobIds()
 	fi
 
 	for _jobDir in *.d; do
-		#  Break for loop if directory is empty
+		# Break for loop if directory is empty
 		if [[ "$_jobDir" == "*.d" ]]; then
 			break
 		fi
@@ -291,7 +299,7 @@ gqstat/listAllJobsDetailed()
 {
 	for _jobId in $( gqstat/getJobIds ); do
 		gqstat/listJobDetailed "$_jobId"
-		#  separate jobs by an empty line
+		# separate jobs by an empty line
 		echo ""
 	done
 	
@@ -309,14 +317,13 @@ gqstat/listJobsInStateDetailed()
 		      "$_specificJobId" == "$_jobId" \
 		]]; then
 			gqstat/listJobDetailed "$_specificJobId"
-			#  separate jobs by an empty line
+			# separate jobs by an empty line
 			echo ""
 		fi			
 	done
 	
 	return	
 }
-
 
 
 gqstat/getJobAttribute()
@@ -331,7 +338,7 @@ gqstat/getJobAttribute()
 		fi
 	done			
 
-	#  unknown job attribute
+	# unknown job attribute
 	return 1	
 }
 
@@ -360,11 +367,13 @@ gqstat/qstat()
 }
 
 ################################################################################
+# MAIN
+################################################################################
 
-#  Defaults:
+# Defaults:
 _mode="list"
 
-#  correct number of params?
+# correct number of params?
 #if [[ "$#" -lt "1" ]]; then
 #   # no, so output a usage message
 #   gqstat/usageMsg
@@ -374,68 +383,70 @@ _mode="list"
 # read in all parameters
 while [[ "$1" != "" ]]; do
 
-	#  only valid params used?
+	# only valid params used?
 	#
-	#  NOTICE:
-	#  This was added to prevent high speed loops
-	#+ if parameters are mispositioned.
+	# NOTICE:
+	# This was added to prevent high speed loops if parameters are
+	# mispositioned.
 	if [[   "$1" != "--help" && \
                 "$1" != "--version" && "$1" != "-V" && \
                 "$1" != "-f" && "$1" != "--detailed-listing" && \
                 "$1" != "-s" && "$1" != "--job-state" \
         ]]; then
-		#  no, so output a usage message
+		# no, so output a usage message
 		gqstat/usageMsg
 		exit $_gqstat_exit_usage
 	fi
 
-	#  "--help"
+	# "--help"
 	if [[ "$1" == "--help" ]]; then
 		gqstat/helpMsg
 		exit $_gqstat_exit_ok
 
-	#  "--version|-V"
+	# "--version|-V"
 	elif [[ "$1" == "--version" || "$1" == "-V" ]]; then
 		gqstat/versionMsg
 		exit $_gqstat_exit_ok
 
-        #  "-f"
+        # "-f"
         elif [[ "$1" == "-f" || "$1" == "--detailed-listing" ]]; then
                 _option="$1"
 		_mode="listDetailed"
                 if [[ "$_jobIdSet" != "$_true" ]]; then
                         shift 1
-                        #  next positional parameter an option or an option parameter?
+                        # next positional parameter an option or an option parameter?
                         if [[ ! "$1" =~ ^-.* && "$1" != "" ]]; then
                                 _jobId="$1"
                                 _jobIdSet="$_true"
                                 shift 1
                         fi
                 else
-                        #  duplicate usage of this parameter
-                        echo "[$_program] E: The option \"$_option\" cannot be used multiple times!" 1>&2
+                        # duplicate usage of this parameter
+                        echo "$_program: The option \"$_option\" cannot be used multiple times!" 1>&2
+                        gqstat/usageMsg
                         exit $_gqstat_exit_usage
                 fi
 
-        #  "-s"
+        # "-s"
         elif [[ "$1" == "-s" || "$1" == "--job-state" ]]; then
                 _option="$1"
                 if [[ "$_jobStateSet" != "$_true" ]]; then
                         shift 1
-                        #  next positional parameter an option or an option parameter?
+                        # next positional parameter an option or an option parameter?
                         if [[ ! "$1" =~ ^-.* && "$1" != "" ]]; then
                                 _jobState="$1"
                                 _jobStateSet="$_true"
                                 shift 1
                         else
-				echo "[$_program] E: Missing argument for option \"$_option\"!" 1>&2
+				echo "$_program: Missing argument for option \"$_option\"!" 1>&2
 				gqstat/usageMsg
 				exit $_gqstat_exit_usage
                         fi
 
                 else
-                        #  duplicate usage of this parameter
-                        echo "[$_program] E: The option \"$_option\" cannot be used multiple times!" 1>&2
+                        # duplicate usage of this parameter
+                        echo "$_program: The option \"$_option\" cannot be used multiple times!" 1>&2
+                        gqstat/usageMsg
                         exit $_gqstat_exit_usage
                 fi
 	fi
