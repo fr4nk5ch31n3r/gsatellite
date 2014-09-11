@@ -78,7 +78,7 @@ _pathsConfigurationFile="$_configurationFilesPath/paths.conf"
 # include path config or fail with EX_SOFTWARE = 70, internal software error not
 # related to OS
 if ! . "$_pathsConfigurationFile"; then
-	echo "($_program) E: Paths configuration file couldn't be read or is corrupted." 1>&2
+	echo "$_program: Paths configuration file \"$_pathsConfigurationFile\" couldn't be read or is corrupted." 1>&2
 	exit 70
 fi
 
@@ -106,7 +106,7 @@ readonly __GLOBAL__jobAttributes=( "job.id"
                                    "job.stop" )
 
 ################################################################################
-# INCLUDE LIBRARY FUNCTIONS
+# INCLUDES
 ################################################################################
 
 # include needed libaries
@@ -121,7 +121,7 @@ for _library in "${_neededLibraries[@]}"; do
 	#_libraryNameTmp=${_
 
 	if ! . "$_LIB"/"$_library"; then
-		echo "($_program) E: Library \""$_LIB"/"$_library"\" couldn't be read or is corrupted." 1>&2
+		echo "$_program: Library \""$_LIB"/"$_library"\" couldn't be read or is corrupted." 1>&2
 		exit 70
 	fi
 done
