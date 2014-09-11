@@ -29,6 +29,14 @@ COPYRIGHT
 ################################################################################
 
 readonly _gsatellite_interface_version="0.2.0"
+readonly _selfName="gsatellite/interface"
+
+################################################################################
+# EXTERNAL VARIABLES
+################################################################################
+
+# _LIB
+# _program
 
 ################################################################################
 # INCLUDES
@@ -41,7 +49,7 @@ _neededLibraries=( "gsatellite/ipc/file/sigfwd.bashlib"
 for _library in ${_neededLibraries[@]}; do
 
 	if ! . "$_LIB/$_library"; then
-		echo "$_program: Library \"$_LIB/$_library\" couldn't be read or is corrupted." 1>&2
+		echo "$_program[$_selfName]: Library \"$_LIB/$_library\" couldn't be read or is corrupted." 1>&2
 		exit 70
 	fi
 done
@@ -122,7 +130,7 @@ gsatellite/interface/qsub()
 
         # If job's not existing, retreat.
         if [[ ! -e "$_job" ]]; then
-                echo "E: Job not existing!" 1>&2
+                echo "$_program[$_selfName]: Job not existing!" 1>&2
                 return 1
         fi
 
@@ -139,7 +147,7 @@ gsatellite/interface/qsub()
         local _messageBox="$_MBOXES/$_gsatlcHostName/$_gsatlcPid.inbox"
 
         if ! ipc/file/sendMsg "$_messageBox" "$_message"; then
-                echo "E: ipc/file/sendMsg() failed!" 1>&2
+                echo "$_program[$_selfName]: ipc/file/sendMsg() failed!" 1>&2
                 return 1
         fi
 
@@ -148,7 +156,7 @@ gsatellite/interface/qsub()
         # wake gsatlc with signal forwarding
         ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal"
         if [[ "$?" != "0" ]]; then
-                echo "E: ipc/file/sigfwd/forwardSignal() failed!" 1>&2
+                echo "$_program[$_selfName]: ipc/file/sigfwd/forwardSignal() failed!" 1>&2
                 return 1
         fi
 
@@ -178,7 +186,7 @@ gsatellite/interface/qsub()
         #echo "($$) DEBUG: _receivedCommand=\"$_receivedCommand\""
 
         if [[ "$_receivedCommand" == "qsub failed" ]]; then
-                echo "E: qsub failed!" 1>&2
+                echo "$_program[$_selfName]: qsub failed!" 1>&2
                 ipc/file/removeMsgBox "$_tempMsgBox"
                 return 1
         else
@@ -213,7 +221,7 @@ gsatellite/interface/qhold()
         local _messageBox="$_MBOXES/$_gsatlcHostName/$_gsatlcPid.inbox"
 
         if ! ipc/file/sendMsg "$_messageBox" "$_message"; then
-                echo "E: ipc/file/sendMsg() failed!" 1>&2
+                echo "$_program[$_selfName]: ipc/file/sendMsg() failed!" 1>&2
                 return 1
         fi
 
@@ -221,7 +229,7 @@ gsatellite/interface/qhold()
 
         # wake gsatlc with signal forwarding
         ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal" || \
-        (echo "E: ipc/file/sigfwd/forwardSignal() failed!" 1>&2 && return 1)
+        (echo "$_program[$_selfName]: ipc/file/sigfwd/forwardSignal() failed!" 1>&2 && return 1)
 
         local _receivedMessage=""
 
@@ -249,7 +257,7 @@ gsatellite/interface/qhold()
         #echo "($$) DEBUG: _receivedCommand=\"$_receivedCommand\""
 
         if [[ "$_receivedCommand" != "OK" ]]; then
-                echo "E: qhold failed!" 1>&2
+                echo "$_program[$_selfName]: qhold failed!" 1>&2
                 ipc/file/removeMsgBox "$_tempMsgBox"
                 return 1
         else
@@ -273,7 +281,7 @@ gsatellite/interface/qrls()
         # running without interacting with gsatlc. This saves some cycles.
         if [[ $( gschedule/getJobState "$_jobId" ) != "held" ]]; then
                 # retreat
-                echo "E: qrls failed! Job \"$_jobId\" not in held state!" 1>&2
+                echo "$_program[$_selfName]: qrls failed! Job \"$_jobId\" not in held state!" 1>&2
                 return 1
         else
 
@@ -287,7 +295,7 @@ gsatellite/interface/qrls()
                 local _messageBox="$_MBOXES/$_gsatlcHostName/$_gsatlcPid.inbox"
 
                 if ! ipc/file/sendMsg "$_messageBox" "$_message"; then
-                        echo "E: ipc/file/sendMsg() failed!" 1>&2
+                        echo "$_program[$_selfName]: ipc/file/sendMsg() failed!" 1>&2
                         return 1
                 fi
 
@@ -295,7 +303,7 @@ gsatellite/interface/qrls()
 
                 # wake gsatlc with signal forwarding
                 ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal" || \
-                (echo "E: ipc/file/sigfwd/forwardSignal() failed!" 1>&2 && return 1)
+                (echo "$_program[$_selfName]: ipc/file/sigfwd/forwardSignal() failed!" 1>&2 && return 1)
 
                 local _receivedMessage=""
 
@@ -323,7 +331,7 @@ gsatellite/interface/qrls()
                 #echo "($$) DEBUG: _receivedCommand=\"$_receivedCommand\""
 
                 if [[ "$_receivedCommand" != "OK" ]]; then
-                        echo "E: qrls failed!" 1>&2
+                        echo "$_program[$_selfName]: qrls failed!" 1>&2
                         ipc/file/removeMsgBox "$_tempMsgBox"
                         return 1
                 else
@@ -348,7 +356,7 @@ gsatellite/interface/qdel()
         #+ saves some cycles.
         if ! gschedule/isValidJobId "$_jobId" || gschedule/isRunningJob "$_jobId"; then
                 #  retreat
-                echo "E: qdel failed!" 1>&2
+                echo "$_program[$_selfName]: qdel failed!" 1>&2
                 return 1
         else
 
@@ -362,7 +370,7 @@ gsatellite/interface/qdel()
                 local _messageBox="$_MBOXES/$_gsatlcHostName/$_gsatlcPid.inbox" 
 
                 if ! ipc/file/sendMsg "$_messageBox" "$_message"; then
-                        echo "E: ipc/file/sendMsg failed!" 1>&2
+                        echo "$_program[$_selfName]: ipc/file/sendMsg failed!" 1>&2
                         return 1
                 fi
 
@@ -370,7 +378,7 @@ gsatellite/interface/qdel()
 
                 #  wake qsatlc with signal forwarding
                 ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal" || \
-                (echo "E: ipc/file/sigfwd/forwardSignal() failed!" 1>&2 && return 1)
+                (echo "$_program[$_selfName]: ipc/file/sigfwd/forwardSignal() failed!" 1>&2 && return 1)
 
                 local _receivedMessage=""
 
@@ -395,7 +403,7 @@ gsatellite/interface/qdel()
                 local _receivedCommand=${_receivedMessage%%;*}
 
                 if [[ "$_receivedCommand" != "OK" ]]; then
-                        echo "E: qdel failed!" 1>&2
+                        echo "$_program[$_selfName]: qdel failed!" 1>&2
                         ipc/file/removeMsgBox "$_tempMsgBox"
                         return 1
                 else
@@ -488,6 +496,7 @@ gsatellite/interface/qstat()
 
                 gsatellite/interface/listJobsInState "$_jobState"
         else
+		echo "$_program[$_selfName]: Unknown job state -- '$_jobState'." 1>&2
                 return 1
         fi
 
