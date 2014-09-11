@@ -419,8 +419,8 @@ gsatellite/interface/listJobsInState()
         local _jobState="$1"
 
         #  right-bound text ouptut (default!)
-        printf "%12s\t%12s\t%12s\t%12s\n" "job.state" "job.id" "job.execHost" "job.name"
-        echo -e "------------\t------------\t------------\t------------"
+        printf "%12s %12s %12s %12s\n" "job.state" "job.id" "job.execHost" "job.name"
+        echo -e "------------ ------------ ------------ ------------"
 
         for _jobDir in $( ls -1 "$_gscheduleBaseDir/$_jobState" ); do
 
@@ -432,7 +432,7 @@ gsatellite/interface/listJobsInState()
                 local _jobName=$( basename $( readlink "$_gscheduleBaseDir/$_jobState/$_jobDir/$_jobId" ) )
 
                 #  left-bound text output ("-"!)
-                printf '%-12s\t%-12s\t%-12s\t%-12s\n' "$_jobState" "$_jobId" "$_jobHost" "$_jobName"
+                printf '%-12s %-12s %-12s %-12s\n' "$_jobState" "$_jobId" "$_jobHost" "$_jobName"
         done
 
         return
@@ -447,8 +447,8 @@ gsatellite/interface/listAllJobs()
         #  perhaps locking needed before listing?
 
         #  right-bound text ouptut (default!)
-        printf "%12s\t%12s\t%12s\t%12s\n" "job.state" "job.id" "job.execHost" "job.name"
-        echo -e "------------\t------------\t------------\t------------"
+        printf "%12s %12s %12s %12s\n" "job.state" "job.id" "job.execHost" "job.name"
+        echo -e "------------ ------------ ------------ ------------"
 
         for _jobDir in $( ls -1 "$_gscheduleBaseDir/jobs" ); do
 
@@ -461,7 +461,7 @@ gsatellite/interface/listAllJobs()
                 local _jobName=$( basename $( readlink "$_gscheduleBaseDir/jobs/$_jobDir/$_jobId" ) )
 
                 #  left-bound text output ("-"!)
-                printf '%-12s\t%-12s\t%-12s\t%-12s\n' "$_jobState" "$_jobId" "$_jobHost" "$_jobName"
+                printf '%-12s %-12s %-12s %-12s\n' "$_jobState" "$_jobId" "$_jobHost" "$_jobName"
         done
 
         return
