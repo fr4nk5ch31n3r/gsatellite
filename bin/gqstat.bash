@@ -110,7 +110,8 @@ readonly __GLOBAL__jobAttributes=( "job.id"
 ################################################################################
 
 # include needed libaries
-_neededLibraries=( "gsatellite/gschedule.bashlib"
+_neededLibraries=( "gsatellite/interface.bashlib"
+		   "gsatellite/gschedule.bashlib"
 		   "gsatellite/utils.bashlib" )
 
 for _library in "${_neededLibraries[@]}"; do
@@ -120,7 +121,7 @@ for _library in "${_neededLibraries[@]}"; do
 	#_libraryNameTmp=${_libraryNameTmp%.*}
 	#_libraryNameTmp=${_
 
-	if ! . "$_LIB"/"$_library"; then
+	if ! . "$_LIB"/"$_library" 2>/dev/null; then
 		echo "$_program: Library \""$_LIB"/"$_library"\" couldn't be read or is corrupted." 1>&2
 		exit 70
 	fi
@@ -160,11 +161,11 @@ gqstat/helpMsg()
 	OPTIONS:
 
 	[-f, --detailed-listing [jobId]]
-				List all available information about jobs or about a
-				specific job if a job id is given.
+	                        List all available information about jobs or about a
+	                        specific job if a job id is given.
 
 	[-s, --job-state jobState]
-				Filter listing by given job state.
+	                        Filter listing by given job state.
 
 	[-V, --version]         Display version information and exit.
 
@@ -184,65 +185,7 @@ gqstat/versionMsg()
 }
 
 
-gqstat/listJobsInState()
-{
-        #  list gsatellite jobs in specified state
-        #
-        #  usage:
-        #+ gqstat/listJobsInState jobState
 
-        local _jobState="$1"
-
-        # right-bound text ouptut (default!)
-        printf "%12s\t%12s\t%12s\t%12s\n" "job.state" "job.id" "job.execHost" "job.name"
-        echo -e "------------\t------------\t------------\t------------"
-
-        for _jobDir in $( ls -1 "$_gscheduleBaseDir/$_jobState" ); do
-
-                #echo "($$) DEBUG: _jobDir=\"$_jobDir\""
-
-                local _jobId=$( basename "$_gscheduleBaseDir/$_jobState/$_jobDir" )
-                _jobId=${_jobId%.d}
-                local _jobHost=$( cat "$_gscheduleBaseDir/jobs/$_jobDir/job.execHost" 2>/dev/null )
-                local _jobName=$( basename $( readlink "$_gscheduleBaseDir/$_jobState/$_jobDir/$_jobId" ) )
-
-                # left-bound text output ("-"!) and truncate values to 12 chars
-                printf '%-.12s\t%-.12s\t%-.12s\t%-.12s\n' "${_jobState::12}" "${_jobId::12}" "${_jobHost::12}" "${_jobName::12}"
-        done
-
-        return
-}
-
-
-gqstat/listAllJobs()
-{
-        #  list all gsatellite jobs
-        #
-        #  usage:
-        #+ gsatlc/listAllJobs
-
-        # perhaps locking needed before listing?
-
-        # right-bound text ouptut (default!)
-        printf "%12s\t%12s\t%12s\t%12s\n" "job.state" "job.id" "job.execHost" "job.name"
-        echo -e "------------\t------------\t------------\t------------"
-
-        for _jobDir in $( ls -1 "$_gscheduleBaseDir/jobs" ); do
-
-                #echo "($$) DEBUG: _jobDir=\"$_jobDir\""
-
-                local _jobId=$( basename "$_gscheduleBaseDir/jobs/$_jobDir" )
-                _jobId=${_jobId%.d}
-                local _jobState=$( cat "$_gscheduleBaseDir/jobs/$_jobDir/job.state" 2>/dev/null )
-                local _jobHost=$( cat "$_gscheduleBaseDir/jobs/$_jobDir/job.execHost" 2>/dev/null )
-                local _jobName=$( basename $( readlink "$_gscheduleBaseDir/jobs/$_jobDir/$_jobId" ) )
-
-                # left-bound text output ("-"!) and truncate values to 12 chars
-                printf '%-12s\t%-12s\t%-12s\t%-12s\n' "${_jobState::12}" "${_jobId::12}" "${_jobHost::12}" "${_jobName::12}"
-        done
-
-        return
-}
 
 
 # Private: Provide detailed listing for a job. This includes all attributes
@@ -459,9 +402,9 @@ done
 if [[ "$_mode" == "list" ]]; then
 
 	if [[ "$_jobStateSet" == "$_true" ]]; then
-		gqstat/listJobsInState "$_jobState"
+		gsatellite/interface/qstat "$_jobState"
 	else
-		gqstat/listAllJobs
+		gsatellite/interface/qstat "all"
 	fi
 
 elif [[ "$_mode" == "listDetailed" ]]; then
