@@ -245,7 +245,12 @@ gqstat/listAllJobs()
 }
 
 
-
+# Private: Provide detailed listing for a job. This includes all attributes
+#          listed in $__GLOBAL__jobAttributes.
+#
+# $1 (_jobId) - Id (number) of the job.
+#
+# Returns 0 on success.
 gqstat/listJobDetailed()
 {
 	local _jobId="$1"
@@ -272,6 +277,11 @@ gqstat/listJobDetailed()
 }
 
 
+# Private: Get all job ids with given job state.
+#
+# $1 (_jobState) - Desired job state (string)
+#
+# Returns 0 on success.
 gqstat/getJobIds()
 {
 	local _jobState="$1"
@@ -295,6 +305,10 @@ gqstat/getJobIds()
 }
 
 
+# Private: Provide detailed listing for all jobs. This includes all attributes
+#          listed in $__GLOBAL__jobAttributes.
+#
+# Returns 0 on success.
 gqstat/listAllJobsDetailed()
 {
 	for _jobId in $( gqstat/getJobIds ); do
@@ -307,6 +321,10 @@ gqstat/listAllJobsDetailed()
 }
 
 
+# Private: Provide detailed listing for all jobs with given job state. This
+#          includes all attributes listed in $__GLOBAL__jobAttributes.
+#
+# Returns 0 on success.
 gqstat/listJobsInStateDetailed()
 {
 	local _jobState="$1"
@@ -326,14 +344,20 @@ gqstat/listJobsInStateDetailed()
 }
 
 
-gqstat/getJobAttribute()
+# Private: Get value of given job attribute for given job id.
+#
+# $1 (_jobId) - Id (number) of the job.
+# $2 (_jobAttribute) - Job attribute (string).
+#
+# Returns 0 on success, 1 otherwise.
+gqstat/getJobAttributeValue()
 {
 	local _jobId="$1"
 	local _jobAttribute="$2"
 	
 	for _attribute in "${__GLOBAL_jobAttributes[@]}"; do
 		if [[ "$_jobAttribute" == "$_attribute" ]]; then
-			cat "$( gschedule/getJobDir "$_jobId")/$_jobAttribute" || return 1
+			cat "$( gschedule/getJobDir "$_jobId")/$_jobAttribute" 2>/dev/null || return 1
 			return 0
 		fi
 	done			
