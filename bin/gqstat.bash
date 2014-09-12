@@ -184,8 +184,8 @@ gqstat/versionMsg()
 
 
 
-# Private: Provide detailed listing for a job. This includes all attributes
-#          listed in $__GLOBAL__jobAttributes.
+# Public: Provide detailed listing for a job. This includes all attributes
+#         listed in $__GLOBAL__jobAttributes.
 #
 # $1 (_jobId) - Id (number) of the job.
 #
@@ -244,8 +244,8 @@ gqstat/getJobIds()
 }
 
 
-# Private: Provide detailed listing for all jobs. This includes all attributes
-#          listed in $__GLOBAL__jobAttributes.
+# Public: Provide detailed listing for all jobs. This includes all attributes
+#         listed in $__GLOBAL__jobAttributes.
 #
 # Returns 0 on success.
 gqstat/listAllJobsDetailed()
@@ -260,8 +260,8 @@ gqstat/listAllJobsDetailed()
 }
 
 
-# Private: Provide detailed listing for all jobs with given job state. This
-#          includes all attributes listed in $__GLOBAL__jobAttributes.
+# Public: Provide detailed listing for all jobs with given job state. This
+#         includes all attributes listed in $__GLOBAL__jobAttributes.
 #
 # Returns 0 on success.
 gqstat/listJobsInStateDetailed()
