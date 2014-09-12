@@ -417,7 +417,7 @@ gsatellite/interface/qdel()
 }
 
 
-# Private: List gsatellite jobs in specified state.
+# Public: List gsatellite jobs in specified state.
 #
 # $1 (_jobState) - Desired job state (string)
 #
@@ -427,8 +427,8 @@ gsatellite/interface/listJobsInState()
         local _jobState="$1"
 
         #  right-bound text output (default!)
-        printf "%12s %12s %12s %12s\n" "job.state" "job.id" "job.execHost" "job.name"
-        echo -e "------------ ------------ ------------ ------------"
+        printf "%12s %6s %24s %24s\n" "job.state" "job.id" "job.execHost" "job.name"
+        echo -e "------------ ------ ------------------------ ------------------------"
 
         for _jobDir in $( ls -1 "$_gscheduleBaseDir/$_jobState" ); do
 
@@ -440,14 +440,14 @@ gsatellite/interface/listJobsInState()
                 local _jobName=$( basename $( readlink "$_gscheduleBaseDir/$_jobState/$_jobDir/$_jobId" ) )
 
                 #  left-bound text output ("-"!)
-                printf '%-12s %-12s %-12s %-12s\n' "${_jobState::12}" "${_jobId::12}" "${_jobHost::12}" "${_jobName::12}"
+                printf '%-12s %-6s %-24s %-24s\n' "${_jobState::12}" "${_jobId::6}" "${_jobHost::24}" "${_jobName::24}"
         done
 
         return
 }
 
 
-# Private: List all gsatellite jobs.
+# Public: List all gsatellite jobs.
 #
 # Returns 0 on success.
 gsatellite/interface/listAllJobs()
@@ -455,8 +455,8 @@ gsatellite/interface/listAllJobs()
         #  perhaps locking needed before listing?
 
         #  right-bound text output (default!)
-        printf "%12s %12s %12s %12s\n" "job.state" "job.id" "job.execHost" "job.name"
-        echo -e "------------ ------------ ------------ ------------"
+        printf "%12s %6s %24s %24s\n" "job.state" "job.id" "job.execHost" "job.name"
+        echo -e "------------ ------ ------------------------ ------------------------"
 
         for _jobDir in $( ls -1 "$_gscheduleBaseDir/jobs" ); do
 
@@ -469,7 +469,7 @@ gsatellite/interface/listAllJobs()
                 local _jobName=$( basename $( readlink "$_gscheduleBaseDir/jobs/$_jobDir/$_jobId" ) )
 
                 #  left-bound text output ("-"!)
-                printf '%-12s %-12s %-12s %-12s\n' "${_jobState::12}" "${_jobId::12}" "${_jobHost::12}" "${_jobName::12}"
+                printf '%-12s %-6s %-24s %-24s\n' "${_jobState::12}" "${_jobId::6}" "${_jobHost::24}" "${_jobName::24}"
         done
 
         return
