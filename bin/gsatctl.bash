@@ -85,7 +85,7 @@ _pathsConfigurationFile="$_configurationFilesPath/paths.conf"
 
 #  include path config or fail with EX_SOFTWARE = 70, internal software error
 #+ not related to OS
-if ! . "$_pathsConfigurationFile"; then
+if ! . "$_pathsConfigurationFile" 2>/dev/null; then
 	echo "$_program: Paths configuration file \"$_pathsConfigurationFile\" couldn't be read or is corrupted." 1>&2
 	exit 70
 fi
@@ -101,7 +101,7 @@ _neededLibraries=( "gsatellite/interface.bashlib" )
 
 for _library in ${_neededLibraries[@]}; do
 
-	if ! . "$_LIB/$_library"; then
+	if ! . "$_LIB/$_library" 2>/dev/null; then
 		echo "$_program: Library \"$_LIB/$_library\" couldn't be read or is corrupted." 1>&2
 		exit 70
 	fi
