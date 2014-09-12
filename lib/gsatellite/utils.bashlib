@@ -1,8 +1,11 @@
-#  utils.bashlib - common utility functions
+#!/bin/bash
+
+# utils.bashlib - common utility functions
 
 :<<COPYRIGHT
 
 Copyright (C) 2012 Frank Scheiner
+Copyright (C) 2014 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -21,19 +24,22 @@ The program is distributed under the terms of the GNU General Public License
 
 COPYRIGHT
 
-:<<INCLUDE
-INCLUDE
+################################################################################
+# DEFINES
+################################################################################
 
-:<<FUNCTIONS
-utils/wakeUp
-utils/exit
-utils/getHostName
-utils/dirname
-utils/basename
-utils/echoIfDebug
-FUNCTIONS
+_gsatellite_utils_version="0.2.0"
 
-utils/wakeUp() {
+################################################################################
+# INCLUDES
+################################################################################
+
+################################################################################
+# FUNCTIONS
+################################################################################
+
+utils/wakeUp()
+{
         #  wakes up the parent after X seconds and a variable time (depending
         #+ on message traffic). This is done regularly after startup.
         #
@@ -59,7 +65,9 @@ utils/wakeUp() {
 
 }
 
-utils/exit() {
+
+utils/exit()
+{
         #  echo _errorMsg to stderr and exit with _error
         #
         #  usage:
@@ -73,7 +81,9 @@ utils/exit() {
         exit "$_error"
 }
 
-utils/getHostName() {
+
+utils/getHostName()
+{
         #  get host name of current machine
         #
         #  usage:
@@ -89,9 +99,11 @@ utils/getHostName() {
         fi
 }
 
+
 #  no full replacements for the ones from the core utils
 
-utils/dirname() {
+utils/dirname()
+{
         #  strip last component from file name
         #
         #  usage:
@@ -104,7 +116,9 @@ utils/dirname() {
         return
 }
 
-utils/basename() {
+
+utils/basename()
+{
         #  strip directory and suffix from file names
         #
         #  usage:
@@ -118,8 +132,11 @@ utils/basename() {
 }
 
 
-utils/echoIfDebug() {
-
+# Emit given message in decorated form to stderr if $_GSAT_DEBUG equals to 1.
+#
+# $1 (_debugMessage) - The message (string) to emit in decorated form.
+utils/debugEcho()
+{
 	local _debugMessage="$1"
 
 	if [[ "$_GSAT_DEBUG" == "1" ]]; then
