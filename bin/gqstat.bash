@@ -28,7 +28,7 @@ COPYRIGHT
 umask 0077
 
 ################################################################################
-# VARIABLES
+# DEFINES
 ################################################################################
 
 _DEBUG="0"
@@ -36,6 +36,23 @@ _DEBUG="0"
 readonly _program=$( basename "$0" )
 readonly _gqstatVersion="0.2.0"
 
+readonly _gqstat_exit_usage=64
+readonly _gqstat_exit_ok=0
+
+readonly _true=1
+readonly _false=0
+
+readonly __GLOBAL__jobAttributes=( "job.id"
+				   "job.name"
+				   "job.dir"
+				   "job.state"
+                                   "job.execHost"
+                                   "job.pid"
+                                   "job.start"
+                                   "job.stop" )
+
+################################################################################
+# PATH CONFIGURATION
 ################################################################################
 
 # path to configuration files (prefer system paths!)
@@ -90,36 +107,15 @@ readonly _GSAT_LIBEXECPATH="$_libexecBasePath"
 _gsatBaseDir="$HOME/.gsatellite"
 _gscheduleBaseDir="$_gsatBaseDir/gschedule"
 
-readonly _gqstat_exit_usage=64
-readonly _gqstat_exit_ok=0
-
-readonly _true=1
-readonly _false=0
-
-readonly __GLOBAL__jobAttributes=( "job.id"
-				   "job.name"
-				   "job.dir"
-				   "job.state"
-                                   "job.execHost"
-                                   "job.pid"
-                                   "job.start"
-                                   "job.stop" )
-
 ################################################################################
 # INCLUDES
 ################################################################################
 
-# include needed libaries
 _neededLibraries=( "gsatellite/interface.bashlib"
 		   "gsatellite/gschedule.bashlib"
 		   "gsatellite/utils.bashlib" )
 
 for _library in "${_neededLibraries[@]}"; do
-
-	#_libraryPrefix=${_library%%/*}
-	#_libraryNameTmp=${_library#*/}
-	#_libraryNameTmp=${_libraryNameTmp%.*}
-	#_libraryNameTmp=${_
 
 	if ! . "$_LIB"/"$_library" 2>/dev/null; then
 		echo "$_program: Library \""$_LIB"/"$_library"\" couldn't be read or is corrupted." 1>&2
@@ -135,7 +131,7 @@ gqstat/usageMsg()
 {
 
 	cat >&2 <<-USAGE
-	usage: $_program [-f [jobId]] [-s jobState]
+	Usage: $_program [-f [jobId]] [-s jobState]
 	Try \`$_program --help' for more information.
 	USAGE
 
@@ -309,21 +305,12 @@ gqstat/getJobAttributeValue()
 	return 1	
 }
 
-
-
 ################################################################################
 # MAIN
 ################################################################################
 
 # Defaults:
 _mode="list"
-
-# correct number of params?
-#if [[ "$#" -lt "1" ]]; then
-#   # no, so output a usage message
-#   gqstat/usageMsg
-#   exit $_gqstat_exit_usage
-#fi
 
 # read in all parameters
 while [[ "$1" != "" ]]; do
