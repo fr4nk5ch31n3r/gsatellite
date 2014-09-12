@@ -440,7 +440,7 @@ gsatellite/interface/listJobsInState()
                 local _jobName=$( basename $( readlink "$_gscheduleBaseDir/$_jobState/$_jobDir/$_jobId" ) )
 
                 #  left-bound text output ("-"!)
-                printf '%-12s %-12s %-12s %-12s\n' "$_jobState" "$_jobId" "$_jobHost" "$_jobName"
+                printf '%-12s %-12s %-12s %-12s\n' "${_jobState::12}" "${_jobId::12}" "${_jobHost::12}" "${_jobName::12}"
         done
 
         return
@@ -469,7 +469,7 @@ gsatellite/interface/listAllJobs()
                 local _jobName=$( basename $( readlink "$_gscheduleBaseDir/jobs/$_jobDir/$_jobId" ) )
 
                 #  left-bound text output ("-"!)
-                printf '%-12s %-12s %-12s %-12s\n' "$_jobState" "$_jobId" "$_jobHost" "$_jobName"
+                printf '%-12s %-12s %-12s %-12s\n' "${_jobState::12}" "${_jobId::12}" "${_jobHost::12}" "${_jobName::12}"
         done
 
         return
