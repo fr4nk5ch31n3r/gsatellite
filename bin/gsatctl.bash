@@ -1,11 +1,11 @@
 #!/bin/bash
 
-#  gsatctl - gsatellite controller (user interface for gsatellite)
+# gsatctl - gsatellite controller (user interface for gsatellite)
 
 :<<COPYRIGHT
 
 Copyright (C) 2012 Frank Scheiner
-Copyright (C) 2013 Frank Scheiner, HLRS, Universitaet Stuttgart
+Copyright (C) 2013, 2014 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -26,19 +26,32 @@ COPYRIGHT
 
 umask 0077
 
+################################################################################
+# DEFINES
+################################################################################
+
 _DEBUG="0"
 
 readonly _program=$( basename "$0" )
-readonly _gsatctlVersion="0.2.0"
+readonly _gsatctlVersion="0.3.0"
 
-readonly _gsatellite_libraryPrefix="gsatellite"
+readonly _gsatctl_exit_usage=64
+readonly _gsatctl_exit_ok=0
 
+readonly _true=1
+readonly _false=0
+
+################################################################################
+# PATH CONFIGURATION
 ################################################################################
 
 #  path to configuration files (prefer system paths!)
 #  For native OS packages:
 if [[ -e "/etc/gsatellite" ]]; then
         _configurationFilesPath="/etc/gsatellite"
+        _installBasePath="/usr"
+        _libBasePath="$_installBasePath/share"
+        _libexecBasePath="$_installBasePath/libexec/gsatellite"
 
 #  For installation with "install.sh".
 #sed#elif [[ -e "<PATH_TO_GSATELLITE>/etc" ]]; then
@@ -49,17 +62,23 @@ if [[ -e "/etc/gsatellite" ]]; then
 #+ gtransfer files, please also use the same provider super dir below
 #+ "/etc/opt").
 #elif [[ -e "/etc/opt/<PROVIDER>/gsatellite" ]]; then
-#	_configurationFilesPath="/etc/opt/<PROVIDER>/gsatellite"
+#	 _configurationFilesPath="/etc/opt/<PROVIDER>/gsatellite"
+#        _configurationFilesPath="/etc/opt/<PROVIDER>/gsatellite"
+#        _installBasePath="/opt/<PROVIDER>/gsatellite"
+#        _libBasePath="$_installBasePath/lib"
+#        _libexecBasePath="$_installBasePath/libexec"
 elif [[ -e "/etc/opt/gsatellite" ]]; then
         _configurationFilesPath="/etc/opt/gsatellite"
+        _installBasePath="/opt/gsatellite"
+        _libBasePath="$_installBasePath/lib"
+        _libexecBasePath="$_installBasePath/libexec"
 
 # For git deploy, use $BASH_SOURCE
 elif [[ -e "$( dirname $BASH_SOURCE )/../etc" ]]; then
 	_configurationFilesPath="$( dirname $BASH_SOURCE )/../etc"
-
-#  For user install in $HOME:
-elif [[ -e "$HOME/.gsatellite" ]]; then
-        _configurationFilesPath="$HOME/.gsatellite"
+	_installBasePath="$( dirname $BASH_SOURCE )/../"
+	_libBasePath="$_installBasePath/lib"
+        _libexecBasePath="$_installBasePath/libexec"
 fi
 
 _pathsConfigurationFile="$_configurationFilesPath/paths.conf"
@@ -67,56 +86,52 @@ _pathsConfigurationFile="$_configurationFilesPath/paths.conf"
 #  include path config or fail with EX_SOFTWARE = 70, internal software error
 #+ not related to OS
 if ! . "$_pathsConfigurationFile"; then
-	echo "($_program) E: Paths configuration file couldn't be read or is corrupted." 1>&2
+	echo "$_program: Paths configuration file \"$_pathsConfigurationFile\" couldn't be read or is corrupted." 1>&2
 	exit 70
 fi
 
+readonly _LIB="$_libBasePath"
+readonly _GSAT_LIBEXECPATH="$_libexecBasePath"
+
+################################################################################
+# INCLUDES
 ################################################################################
 
-# include needed libaries
-_neededLibraries=(
-"${_gsatellite_libraryPrefix}/interface.bashlib"
-)
+_neededLibraries=( "gsatellite/interface.bashlib" )
 
 for _library in ${_neededLibraries[@]}; do
 
-	if ! . "$_LIB"/"$_library"; then
-		echo "($_program) E: Library \""$_LIB"/"$_library"\" couldn't be read or is corrupted." 1>&2
+	if ! . "$_LIB/$_library"; then
+		echo "$_program: Library \"$_LIB/$_library\" couldn't be read or is corrupted." 1>&2
 		exit 70
 	fi
 done
 
-################################################################################
-
-#_gsatBaseDir=$HOME/.gsatellite
-#_gscheduleBaseDir="$_gsatBaseDir/gschedule"
-
 
 ################################################################################
+# FUNCTIONS
+################################################################################
 
-gsatctl/usageMsg() {
+gsatctl/usageMsg()
+{
 
-    cat <<-USAGE
-
-usage: gsatctl [--help]
-       gsatctl --qsub jobFile
-       gsatctl --qhold jobId
-       gsatctl --qrls jobId
-       gsatctl --qdel jobId
-       gsatctl --qstat [jobState]
-
---help gives more information
-
+	cat <<-USAGE
+Usage: gsatctl --qsub jobFile
+   or: gsatctl --qhold jobId
+   or: gsatctl --qrls jobId
+   or: gsatctl --qdel jobId
+   or: gsatctl --qstat [jobState]
+Try \`$_program --help' for more information.
 USAGE
 
-    return
+	return
 }
 
 
-gsatctl/helpMsg() {
+gsatctl/helpMsg()
+{
     
-    cat <<-HELP
-
+	cat <<-HELP
 $( gsatctl/versionMsg )
 
 SYNOPSIS:
@@ -162,52 +177,56 @@ gqwait jobId
 
 HELP
 
-    return
+	return
 }
 
-gsatctl/versionMsg() {
 
-        echo "$_program v$_gsatctlVersion"
+gsatctl/versionMsg()
+{
+	echo "$_program v$_gsatctlVersion"
 
-        return
+	return
 }
 
 ################################################################################
+# MAIN
+################################################################################
 
+# Short hands
 case $( basename "$0" ) in
-        "gqstat")
-                exec gsatctl --qstat "$@"
-                ;;
+"gqstat")
+	exec gsatctl --qstat "$@"
+	;;
 
-        "gqhold")
-                exec gsatctl --qhold "$@"
-                ;;
+"gqhold")
+	exec gsatctl --qhold "$@"
+	;;
 
-        "gqrls")
-                exec gsatctl --qrls "$@"
-                ;;
+"gqrls")
+	exec gsatctl --qrls "$@"
+	;;
 
-        "gqsub")
-                exec gsatctl --qsub "$@"
-                ;;
+"gqsub")
+	exec gsatctl --qsub "$@"
+	;;
 
-        "gqdel")
-                exec gsatctl --qdel "$@"
-                ;;
+"gqdel")
+	exec gsatctl --qdel "$@"
+	;;
 
-        "gqwait")
-                exec gsatctl --qwait "$@"
-                ;;
-        *)
-                :
-                ;;
+"gqwait")
+	exec gsatctl --qwait "$@"
+	;;
+*)
+	:
+	;;
 esac
 
 #  correct number of params?
 if [[ "$#" -lt "1" ]]; then
-   # no, so output a usage message
-   gsatctl/usageMsg
-   exit 1
+	# no, so output a usage message
+	gsatctl/usageMsg
+	exit 1
 fi
 
 # read in all parameters
@@ -226,10 +245,10 @@ while [[ "$1" != "" ]]; do
                 "$1" != "--qdel" && "$1" != "-d" && \
                 "$1" != "--qstat" && "$1" != "-l" && \
                 "$1" != "--qwait" && "$1" != "-w" \
-        ]]; then
+	]]; then
 		#  no, so output a usage message
 		gsatctl/usageMsg
-		exit 1   
+		exit $_gsatctl_exit_usage
 	fi
 
 	#  "--help"
@@ -244,26 +263,28 @@ while [[ "$1" != "" ]]; do
 
 	#  "--qsub|-s job"
 	elif [[ "$1" == "--qsub" || "$1" == "-s" ]]; then
-                _option="$1"
-                if [[ "$_jobSet" != "0" ]]; then
-	                shift 1
-                        #  next positional parameter an option or an option parameter?
-                        if [[ ! "$1" =~ ^-.* && "$1" != "" ]]; then
-                                _job="$1"
-                                _jobSet="0"
-                                shift 1
-                        else
-                                echo "E: missing option parameter for \"$_option\"!"
-                                exit 1
-                        fi
+		_option="$1"
+		if [[ "$_jobSet" != "0" ]]; then
+			shift 1
+			#  next positional parameter an option or an option parameter?
+			if [[ ! "$1" =~ ^-.* && "$1" != "" ]]; then
+				_job="$1"
+				_jobSet="0"
+				shift 1
+			else
+				echo "$_program: Missing argument for option \"$_option\"!" 1>&2
+				gsatctl/usageMsg
+				exit $_gsatctl_exit_usage
+			fi
 
-                        gsat/qsub "$_job"
-                        exit
-                else
-	                #  duplicate usage of this parameter
-	                echo "ERROR: The option \"$_option\" cannot be used multiple times!"
-	                exit 1
-                fi
+			gsatellite/interface/qsub "$_job"
+			exit
+		else
+			#  duplicate usage of this parameter
+			echo "$_program: The option \"$_option\" cannot be used multiple times!" 1>&2
+			gsatctl/usageMsg
+			exit $_gsatctl_exit_usage
+		fi
 
         #  "--qdel|-d jobId"
         elif [[ "$1" == "--qdel" || "$1" == "-d" ]]; then
@@ -276,16 +297,18 @@ while [[ "$1" != "" ]]; do
                                 _jobIdSet="0"
                                 shift 1
                         else
-                                echo "E: missing option parameter for \"$_option\"!"
-                                exit 1
+                                echo "$_program: Missing argument for option \"$_option\"!" 1>&2
+                                gsatctl/usageMsg
+				exit $_gsatctl_exit_usage
                         fi
 
-                        gsat/qdel "$_jobId"
+                        gsatellite/interface/qdel "$_jobId"
                         exit
                 else
 	                #  duplicate usage of this parameter
-	                echo "ERROR: The option \"$_option\" cannot be used multiple times!"
-	                exit 1
+	                echo "$_program: The option \"$_option\" cannot be used multiple times!" 1>&2
+	                gsatctl/usageMsg
+			exit $_gsatctl_exit_usage
                 fi
 
         #  "--qstat|-l [jobState]"
@@ -303,12 +326,13 @@ while [[ "$1" != "" ]]; do
                                 _jobStateSet="0"
                         fi
 
-                        gsat/qstat "$_jobState"
+                        gsatellite/interface/qstat "$_jobState"
                         exit
                 else
                         #  duplicate usage of this parameter
-                        echo "ERROR: The option \"$_option\" cannot be used multiple times!"
-                        exit 1
+                        echo "$_program: The option \"$_option\" cannot be used multiple times!" 1>&2
+                        gsatctl/usageMsg
+			exit $_gsatctl_exit_usage
                 fi
 
         #  "--qhold|-h jobId"
@@ -322,16 +346,18 @@ while [[ "$1" != "" ]]; do
                                 _jobIdSet="0"
                                 shift 1
                         else
-                                echo "E: missing option parameter for \"$_option\"!"
-                                exit 1
+                                echo "$_program: Missing argument for option \"$_option\"!" 1>&2
+                                gsatctl/usageMsg
+				exit $_gsatctl_exit_usage
                         fi
 
-                        gsat/qhold "$_jobId"
+                        gsatellite/interface/qhold "$_jobId"
                         exit
                 else
                         #  duplicate usage of this parameter
-                        echo "ERROR: The option \"$_option\" cannot be used multiple times!"
-                        exit 1
+                        echo "$_program: The option \"$_option\" cannot be used multiple times!" 1>&2
+                        gsatctl/usageMsg
+			exit $_gsatctl_exit_usage
                 fi
 
         #  "--qrls|-r jobId"
@@ -345,16 +371,18 @@ while [[ "$1" != "" ]]; do
                                 _jobIdSet="0"
                                 shift 1
                         else
-                                echo "E: missing option parameter for \"$_option\"!"
-                                exit 1
+                                echo "$_program: Missing argument for option \"$_option\"!" 1>&2
+                                gsatctl/usageMsg
+				exit $_gsatctl_exit_usage
                         fi
 
-                        gsat/qrls "$_jobId"
+                        gsatellite/interface/qrls "$_jobId"
                         exit
                 else
                         #  duplicate usage of this parameter
-                        echo "ERROR: The option \"$_option\" cannot be used multiple times!"
-                        exit 1
+                        echo "$_program: The option \"$_option\" cannot be used multiple times!" 1>&2
+                        gsatctl/usageMsg
+			exit $_gsatctl_exit_usage
                 fi
 
         #  "--qwait|-w jobId"
@@ -368,17 +396,19 @@ while [[ "$1" != "" ]]; do
                                 _jobIdSet="0"
                                 shift 1
                         else
-                                echo "E: missing option parameter for \"$_option\"!"
-                                exit 1
+                                echo "$_program: Missing argument for option \"$_option\"!" 1>&2
+                                gsatctl/usageMsg
+				exit $_gsatctl_exit_usage
                         fi
 
-                        echo "Sorry, function is not available yet!"
-                        #gsat/qwait "$_jobId"
+                        echo "$_program: Sorry, this functionality is not available yet!"
+                        #gsatellite/interface/qwait "$_jobId"
                         exit
                 else
                         #  duplicate usage of this parameter
-                        echo "ERROR: The option \"$_option\" cannot be used multiple times!"
-                        exit 1
+                        echo "$_program: The option \"$_option\" cannot be used multiple times!" 1>&2
+                        gsatctl/usageMsg
+			exit $_gsatctl_exit_usage
                 fi
 
         fi
