@@ -1,9 +1,11 @@
-#  gsatlc.bashlib - library functions for gsatellite launch control
+#!/bin/bash
+
+# gsatlc.bashlib - library functions for gsatellite launch control
 
 :<<COPYRIGHT
 
 Copyright (C) 2012 Frank Scheiner
-Copyright (C) 2013 Frank Scheiner, HLRS, Universitaet Stuttgart
+Copyright (C) 2013, 2014 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -22,28 +24,42 @@ The program is distributed under the terms of the GNU General Public License
 
 COPYRIGHT
 
-:<<INCLUDE
-ipc.bashlib
-gschedule.bashlib
-INCLUDE
+################################################################################
+# DEFINES
+################################################################################
 
-:<<FUNCTIONS
-FUNCTIONS
+readonly _gsatellite_gsatlc_version="0.2.0"
+readonly _gsatellite_gsatlc_selfName="gsatellite/lc"
+readonly _scheduler="fifo"
+#readonly _scheduler="nobatch"
 
-_scheduler="fifo"
-#_scheduler="nobatch"
+################################################################################
+# EXTERNAL VARIABLES
+################################################################################
 
-. "$_LIB"/ipc.bashlib
-. "$_LIB"/gschedule/$_scheduler.bashlib
+# _LIB
+# _program
 
+################################################################################
+# INCLUDES
+################################################################################
 
+. "$_LIB"/gsatellite/utils.bashlib 2>/dev/null
+. "$_LIB"/gsatellite/ipc.bashlib 2>/dev/null # probably not needed!
+. "$_LIB"/gsatellite/gschedule/$_scheduler.bashlib 2>/dev/null
+
+################################################################################
+# FUNCTIONS
+################################################################################
+
+# Process a received message.
+#
+# $1 (_message) - File (string) containing the message.
+# $2 (_inbox)   - Directory (string) containing the messae file.
+#
+# Returns 1 on error, 2 on unknown command in received message.
 gsatlc/processMsg()
 {
-        #  process a received message
-        #
-        #  usage:
-        #+ processMsg message inbox
-
         local _message="$1"
         local _inbox="$2"
 
@@ -136,17 +152,16 @@ gsatlc/processMsg()
                 local _jobId=$( echo "$_command" | cut -d ' ' -f 2 )
 
 		# Notification
-		echo "($$) [gsatlc] DEBUG: Before onEvent() $( date +%s)" 1>&2
-
-		echo "($$) [gsatlc] DEBUG: _jobId=\"$_jobId\"" 1>&2
+		utils/debugEcho "$_program[$_gsatellite_gsatlc_selfName]: Before onEvent() $( date +%s)"
+		utils/debugEcho "$_program[$_gsatellite_gsatlc_selfName]: _jobId=\"$_jobId\""
 
 		local _environment=$( gschedule/getJobDir "$_jobId" )"/${_gschedule_jobEnvFileName}"
 
-		echo "($$) [gsatlc] DEBUG: _environment=\"$_environment\"" 1>&2
+		utils/debugEcho "$_program[$_gsatellite_gsatlc_selfName]: _environment=\"$_environment\""
 
 		gschedule/onEvent "JOB_START" "$_environment" &
 
-		echo "($$) [gsatlc] DEBUG: After onEvent() $( date +%s)" 1>&2
+		utils/debugEcho "$_program[$_gsatellite_gsatlc_selfName]: After onEvent() $( date +%s)"
 
 		return
 
@@ -157,17 +172,16 @@ gsatlc/processMsg()
                 local _jobExitValue=$( echo "$_command" | cut -d ' ' -f 3 )
 
 		# Notification
-		echo "($$) [gsatlc] DEBUG: Before onEvent() $( date +%s)" 1>&2
-
-		echo "($$) [gsatlc] DEBUG: _jobId=\"$_jobId\"" 1>&2
+		utils/debugEcho "$_program[$_gsatellite_gsatlc_selfName]: Before onEvent() $( date +%s)"
+		utils/debugEcho "$_program[$_gsatellite_gsatlc_selfName]: _jobId=\"$_jobId\""
 
 		local _environment=$( gschedule/getJobDir "$_jobId" )"/${_gschedule_jobEnvFileName}"
 
-		echo "($$) [gsatlc] DEBUG: _environment=\"$_environment\"" 1>&2
+		utils/debugEcho "$_program[$_gsatellite_gsatlc_selfName]: _environment=\"$_environment\""
 
 		gschedule/onEvent "JOB_TERMINATION" "$_environment" &
 
-		echo "($$) [gsatlc] DEBUG: After onEvent() $( date +%s)" 1>&2
+		utils/debugEcho "$_program[$_gsatellite_gsatlc_selfName]: After onEvent() $( date +%s)"
 
                 #  check if job is/was in running state
                 if gschedule/isRunningJob "$_jobId"; then
@@ -202,13 +216,13 @@ gsatlc/processMsg()
 }
 
 
+# Submit a job to the scheduler.
+#
+# $1 (_job) - Job file (string) to submit.
+#
+# Returns 0 on success and emits the id given to the job, 1 otherwise.
 gsatlc/qsub()
 {
-        #  submit a job to gsatellite
-        #
-        #  usage:
-        #+ gsatlc/qsub job
-
         local _job="$1"
 
         local _jobId=$( gschedule/$_scheduler/schedule "$_job" )
@@ -222,13 +236,13 @@ gsatlc/qsub()
 }
 
 
+# Instruct the scheduler to put a hold an a job.
+#
+# $1 (_jobId) - Id (number) of the job.
+#
+# See gschedule/holdJob() for possible return codes.
 gsatlc/qhold()
 {
-        #  hold a job
-        #
-        #  usage:
-        #+ gsatlc/qhold jobId
-
         local _jobId="$1"
 
         gschedule/holdJob "$_jobId"
@@ -237,29 +251,31 @@ gsatlc/qhold()
 }
 
 
+# Instruct scheduler to relase a hold that was put on a job.
+#
+# $1 (_jobId) - Id (number) of the job.
+#
+# See gsatlc/schedule() for possible return codes.
 gsatlc/qrls()
 {
-        #  release a hold on a job
-        #
-        #  usage:
-        #+ gsatlc/qrls jobId
-
         local _jobId="$1"
 
         gschedule/releaseJob "$_jobId"
+        # TODO:
+        # Evaluate return code!
         gsatlc/schedule
 
         return
 }
 
 
+# Instruct scheduler to remove a job from gsatellite.
+#
+# $1 (_jobId) - Id (number) of the job.
+#
+# See gschedule/removeJob() for possible return codes.
 gsatlc/qdel()
 {
-        #  remove a job from gsatellite
-        #
-        #  usage:
-        #+ gsatlc/qdel jobId
-
         local _jobId="$1"
 
         gschedule/removeJob "$_jobId"
@@ -268,13 +284,11 @@ gsatlc/qdel()
 }
 
 
+# Call scheduler to start the next job that is in state queued.
+#
+# Returns 0 on success, 1 otherwise.
 gsatlc/schedule()
 {
-        #  call scheduler to start the next ready job
-        #
-        #  usage:
-        #+ gsatlc/schedule
-
         gschedule/$_scheduler/schedule
 
         if [[ "$?" == "0" ]]; then
