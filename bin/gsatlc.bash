@@ -1,13 +1,12 @@
 #!/bin/bash
-
-#  gsatlc.bash - gsatellite launch control
+# gsatlc.bash - gsatellite launch control
 #
-#  controls satellites
+# controls satellites
 
 :<<COPYRIGHT
 
 Copyright (C) 2011, 2012 Frank Scheiner
-Copyright (C) 2013 Frank Scheiner, HLRS, Universitaet Stuttgart
+Copyright (C) 2013, 2014 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -28,17 +27,23 @@ COPYRIGHT
 
 umask 0077
 
+################################################################################
+# DEFINES
+################################################################################
+
 _DEBUG="0"
 
-_program=$( basename "$0" )
+readonly _program=$( basename "$0" )
+readonly _gsatlcVersion="0.3.0"
 
-readonly __GLOBAL__version="0.2.0"
+readonly _gsatlcInboxName="gsatlc.inbox"
+readonly _gsatBaseDir=$HOME/.gsatellite
 
-_gsatlcInboxName="gsatlc.inbox"
-_gsatBaseDir=$HOME/.gsatellite
+# run the action every 4 seconds
+readonly _actionPeriod=4
 
-_scheduler="fifo"
-
+################################################################################
+# PATH CONFIGURATION
 ################################################################################
 
 #  path to configuration files (prefer system paths!)
@@ -73,19 +78,39 @@ _pathsConfigurationFile="$_configurationFilesPath/paths.conf"
 #  include path config or fail with EX_SOFTWARE = 70, internal software error
 #+ not related to OS
 if ! . "$_pathsConfigurationFile"; then
-	echo "($_program) E: Paths configuration file couldn't be read or is corrupted." 1>&2
+	echo "$_program: Paths configuration file couldn't be read or is corrupted." 1>&2
 	exit 70
 fi
 
-#. "$_LIB"/ipc.bashlib
-#. "$_LIB"/ipc/file.bashlib
-. "$_LIB"/ipc/file/sigfwd.bashlib
-. "$_LIB"/ipc/file/msgproc.bashlib
-. "$_LIB"/gsatlc.bashlib
-. "$_LIB"/utils.bashlib
+_actionTemplate="${_GSAT_LIBEXECPATH}/actions/templates/periodicPidFileUpdate.bash"
 
-#  reimplementation with if clauses, as this could allow to include
-#+ functionality dynamically
+################################################################################
+# INCLDUES
+################################################################################
+
+_neededLibraries=( "gsatellite/ipc/file/sigfwd.bashlib"
+		   "gsatellite/ipc/file/msgproc.bashlib"
+		   "gsatellite/gsatlc.bashlib"
+		   "gsatellite/utils.bashlib" )
+
+for _library in "${_neededLibraries[@]}"; do
+	if ! . "$_LIB"/"$_library" 2>/dev/null; then
+		echo "$_program: Library \""$_LIB"/"$_library"\" couldn't be read or is corrupted." 1>&2
+		exit 70
+	fi
+done
+
+################################################################################
+# FUNCTIONS
+################################################################################
+
+# Public: Process a received message.
+#
+# $1 (_message) - File (string) containing the message.
+# $2 (_inbox)   - Directory (string) containing the messae file.
+#
+# Returns 0 on success, 1 on general error and 2 on unknown command in received
+# message.
 processMsg() {
         #  process a received message
         #
@@ -95,13 +120,13 @@ processMsg() {
         local _message="$1"
         local _inbox="$2"
 
-        #  gsatlc special functionality for message processing
+        # gsatlc special functionality for message processing
         gsatlc/processMsg "$_message" "$_inbox"
 
-        #  unknown event or command?
+        # unknown event or command?
         if [[ "$?" == "2" ]]; then
 
-                #  try standard functionality for message processing
+                # try standard functionality for message processing
                 ipc/file/msgproc/processMsg "$_message" "$_inbox"
 
         else
@@ -112,12 +137,13 @@ processMsg() {
         return
 }
 
-#  onExit() - perform cleanup on exit.
+
+# Private: Perform cleanup on exit.
 gsatlc/onExit()
 {
 	#gsatlc/stopAllJobs
 
-	#  remove all message boxes
+	# remove all message boxes
 	ipc/file/removeMsgBox "$_inbox"
 
 	if [[ ! -z $_actionId ]]; then
@@ -127,13 +153,23 @@ gsatlc/onExit()
 	# remove state files if still existing
 	rm -f "$_gsatBaseDir/gsatlcHostName" "$_gsatBaseDir/gsatlcPid"
 
-	sigfwdd --stop && echo "($$) [gsatlc] Signal forwarding stopped."
-	echo "($$) [gsatlc] Shutting down."
+	sigfwdd --stop && echo "$_program: Signal forwarding stopped."
+	echo "$_program: Shutting down."
 
 	return
 }
 
 
+# Private: Prepare periodic action.
+#
+# $1 (_actionTemplate) - The action template file (string) to prepare.
+# $2 (_pidFile)        - The PID file (string) the action should touch during
+#                        execution.
+# $3 (_period)         - The action will touch the PID file every period seconds
+#                        (number).
+#
+# Returns 0 on success, 1 otherwise. On success prints the file name (string) of
+# the prepared action.
 gsatlc/prepareAction()
 {
 	local _actionTemplate="$1"
@@ -153,53 +189,50 @@ gsatlc/prepareAction()
 		return 1
 	fi
 }
+
+################################################################################
+# MAIN
 ################################################################################
 
-_actionTemplate="${_GSAT_LIBEXECPATH}/actions/templates/periodicPidFileUpdate.bash"
-# run action every 4 seconds
-_actionPeriod=4
+# TODO:
+# On exit, stop (all) running job(s). On start, start jobs depending on the
+# scheduler.
 
-#  TODO:
-#+ On exit, stop (all) running job(s). On start, start jobs depending on the
-#+ scheduler.
-
-#  setup trap to remove inbox on exit
-#trap 'ipc/file/removeLocalMsgBoxByName "$_inboxName"; ipc/file/sigfwd/stopSigfwd' EXIT
-#trap 'ipc/file/removeLocalMsgBoxByName "$_inboxName"; sigfwdd --stop && echo "($$) Signal forwarding stopped."; echo "($$) Shutting down."' EXIT
+# setup trap for cleanup on exit
 trap 'gsatlc/onExit' EXIT
 
-#  Startup
+# Startup
 _self="$$"
 
 _inboxName="$_self.inbox"
 
-#  create inbox
+# create inbox
 _inbox=$( ipc/file/createMsgBox "$_inboxName" )
 
-#  save hostname, pid, etc.
+# save hostname, pid, etc.
 _hostName=$( utils/getHostName )
 mkdir -p "$_gsatBaseDir/var/run/$_hostName"
 echo "$_hostName" > "$_gsatBaseDir/gsatlcHostName"
 echo $_self > "$_gsatBaseDir/gsatlcPid"
 
-#  start signal forwarder
-sigfwdd --start && echo "($$) [gsatlc] Signal forwarding started."
+# start signal forwarder
+sigfwdd --start && echo "$_program: Signal forwarding started."
 
-# Delegate periodic update of PID file with sigfwd.
-#
-# This could work as follows, a process can provide a script file that is made
-# available to sigfwd. Sigfwd will then execute the script file in the
-# background and give back an ID identifying the specific action. By using this
-# ID, an action can later be unregistered.
-
+# prepare periodic PID file update
 _action=$( gsatlc/prepareAction "$_actionTemplate" "$_gsatBaseDir/gsatlcPid" "$_actionPeriod" )
 
+# Delegate periodic update of own PID file to sigfwd.
+#
+# This works as follows, a process provides a script file - the action - that is
+# made available to sigfwd. Sigfwd will then execute the script file in the
+# background and give back an ID identifying the specific action. By using this
+# ID, an action can later be unregistered.
 if [[ $? != 0 ]]; then
 
-	echo "($$) [gsatlc] Periodic PID file update could not be pepared. Exiting."
+	echo "$_program: Periodic PID file update could not be pepared. Exiting." 1>&2
 	exit 1
 else
-	echo "($$) [gsatlc] Periodic PID file update pepared."
+	echo "$_program: Periodic PID file update pepared."
 
 	sleep 1
 
@@ -207,14 +240,14 @@ else
 
 	if [[ $? != 0 ]]; then
 
-		echo "($$) [gsatlc] Periodic PID file update could not be delegated. Exiting."
+		echo "$_program: Periodic PID file update could not be delegated. Exiting." 1>&2
 		exit 1
 	else
-		echo "($$) [gsatlc] Periodic PID file update delegated."
+		echo "$_program: Periodic PID file update delegated."
 	fi
 fi
 
-echo "($$) [gsatlc] Started up."
+echo "$_program: Started up."
 
 #gsatlc/startAllJobs
 
@@ -223,8 +256,8 @@ while [[ 1 ]]; do
                 _message=$( ipc/file/receiveMsg "$_inbox" )
                 processMsg "$_message" "$_inbox"
         else
-                #  pause execution
-                #  If you need something, wake me up!
+                # pause execution
+                # If you need something from me, wake me up!
                 /bin/kill -SIGSTOP "$_self"
         fi
 done
