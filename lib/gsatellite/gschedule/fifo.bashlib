@@ -1,9 +1,11 @@
 #!/bin/bash
-#  gschedule/fifo.bashlib - FIFO scheduler for gsatellite
+
+# gschedule/fifo.bashlib - FIFO scheduler for gsatellite
 
 :<<COPYRIGHT
 
 Copyright (C) 2012 Frank Scheiner
+Copyright (C) 2014 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -22,36 +24,40 @@ The program is distributed under the terms of the GNU General Public License
 
 COPYRIGHT
 
-readonly _thisScheduler="fifo"
-
-:<<INCLUDE
-../gschedule.bashlib
-INCLUDE
-
-:<<FUNCTIONS
-gschedule/$_thisScheduler/schedule
-gschedule/$_thisScheduler/usageMsg
-gschedule/$_thisScheduler/helpMsg
-gschedule/$_thisScheduler/versionMsg
-FUNCTIONS
-
-. "$_LIB"/gschedule.bashlib
-
+################################################################################
+# DEFINES
 ################################################################################
 
-_gscheduleFifoVersion="0.0.1"
+readonly _gsatellite_gschedule_fifo_version="0.2.0"
+readonly _gsatellite_gschedule_fifo_selfName="gsatellite/gschedule/fifo"
+readonly _thisScheduler="fifo"
 
+################################################################################
+# EXTERNAL VARIABLES
+################################################################################
+
+# _LIB
+
+################################################################################
+# INCLUDES
+################################################################################
+
+. "$_LIB"/gsatellite/gschedule.bashlib 2>/dev/null
+
+################################################################################
+# FUNCTIONS
 ################################################################################
 
 #  General TODO:
 #+ All actions in and on job dirs should be encapsulated in functions!
 
-gschedule/fifo/isRunableJob() {
-        #  can we run the given job?
-        #
-        #  usage:
-        #+ gschedule/nobatch/isRunableJob job
-
+# Public: Determine if given job is runable.
+#
+# $1 (_job) - The job (string) file. (UNUSED)
+#
+# Returns 0 on success (job is runable), 1 otherwise (job is not runable).
+gschedule/fifo/isRunableJob()
+{
         #  TODO:
         #+ Check if job is valid!
         local _job="$1"
@@ -63,7 +69,14 @@ gschedule/fifo/isRunableJob() {
         fi
 }
 
-gschedule/fifo/schedule() {
+
+# Public: Schedule given job. If job is not provided, start next runable job.
+#
+# $1 (_job) - The job (string) to schedule. (OPTIONAL)
+#
+# Return 0 on success, 1 otherwise.
+gschedule/fifo/schedule()
+{
         #  schedule job
         #
         #  usage:
@@ -159,58 +172,5 @@ gschedule/fifo/schedule() {
 
                 fi
         fi
-}
-
-################################################################################
-#  Functions below are not needed any longer!
-
-gschedule/fifo/usageMsg() {
-
-    cat <<-USAGE
-
-    usage: gschedule [--help] ||
-           gschedule -f, --job jobFile
-
-    --help gives more information
-
-USAGE
-
-    return
-}
-
-
-gschedule/fifo/helpMsg() {
-    
-    cat <<-HELP
-
-$( gschedule/fifo/versionMsg )
-
-SYNOPSIS:
-
-gschedule [options]
-
-DESCRIPTION:
-
-gschedule is the job scheduler for gsatellite and is configured for FIFO
-scheduling. This means that only one job can run at a time.
-
-OPTIONS:
-
--f, --job jobFile       Set the job (file) that is to be scheduled.
-
-[--help]                Display this help and exit.
-
-[-V, --version]         Display version information and exit.
-
-HELP
-
-    return
-}
-
-gschedule/fifo/versionMsg() {
-
-    echo "gschedule v$_gscheduleVersion (FIFO scheduler v$_gscheduleFifoVersion)"
-
-    return
 }
 
