@@ -30,8 +30,9 @@ COPYRIGHT
 
 readonly _gsatellite_gsatlc_version="0.2.0"
 readonly _gsatellite_gsatlc_selfName="gsatellite/lc"
+
+# Select scheduler to use ("fifo" or "nobatch")
 readonly _scheduler="fifo"
-#readonly _scheduler="nobatch"
 
 ################################################################################
 # EXTERNAL VARIABLES
