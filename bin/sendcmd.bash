@@ -227,7 +227,7 @@ _noSignalForwarding=$_false
 _noWaitForAnswer=$_false
 
 # correct number of params?
-if [[ "$#" -ne 1 ]]; then
+if [[ "$#" -lt 1 ]]; then
    # no, so output a usage message
    sendcmd/usageMsg
    exit 1
