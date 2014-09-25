@@ -333,8 +333,8 @@ while [[ "$1" != "" ]]; do
 done
 
 # check that all mandatory options are set
-if [[ $_commandSet -eq 0 && \
-      $_messageBoxSet -eq 0 \
+if [[ $_commandSet -eq $_true && \
+      $_messageBoxSet -eq $_true \
 ]]; then
         # continue
         :
