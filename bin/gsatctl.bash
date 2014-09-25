@@ -63,7 +63,6 @@ if [[ -e "/etc/gsatellite" ]]; then
 #+ "/etc/opt").
 #elif [[ -e "/etc/opt/<PROVIDER>/gsatellite" ]]; then
 #	 _configurationFilesPath="/etc/opt/<PROVIDER>/gsatellite"
-#        _configurationFilesPath="/etc/opt/<PROVIDER>/gsatellite"
 #        _installBasePath="/opt/<PROVIDER>/gsatellite"
 #        _libBasePath="$_installBasePath/lib"
 #        _libexecBasePath="$_installBasePath/libexec"
