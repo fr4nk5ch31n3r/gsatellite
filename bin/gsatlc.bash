@@ -107,7 +107,7 @@ done
 # Public: Process a received message.
 #
 # $1 (_message) - File (string) containing the message.
-# $2 (_inbox)   - Directory (string) containing the messae file.
+# $2 (_inbox)   - Directory (string) containing the message file.
 #
 # Returns 0 on success, 1 on general error and 2 on unknown command in received
 # message.
