@@ -276,8 +276,8 @@ while [[ "$1" != "" ]]; do
 				exit $_gsatctl_exit_usage
 			fi
 
-			gsatellite/interface/qsub "$_job"
-			exit
+			_functionCall="gsatellite/interface/qsub $_job"
+			break
 		else
 			#  duplicate usage of this parameter
 			echo "$_program: The option \"$_option\" cannot be used multiple times!" 1>&2
@@ -301,8 +301,8 @@ while [[ "$1" != "" ]]; do
 				exit $_gsatctl_exit_usage
                         fi
 
-                        gsatellite/interface/qdel "$_jobId"
-                        exit
+                        _functionCall="gsatellite/interface/qdel $_jobId"
+                        break
                 else
 	                #  duplicate usage of this parameter
 	                echo "$_program: The option \"$_option\" cannot be used multiple times!" 1>&2
@@ -325,8 +325,8 @@ while [[ "$1" != "" ]]; do
                                 _jobStateSet="0"
                         fi
 
-                        gsatellite/interface/qstat "$_jobState"
-                        exit
+                        _functionCall="gsatellite/interface/qstat $_jobState"
+                        break
                 else
                         #  duplicate usage of this parameter
                         echo "$_program: The option \"$_option\" cannot be used multiple times!" 1>&2
@@ -350,8 +350,8 @@ while [[ "$1" != "" ]]; do
 				exit $_gsatctl_exit_usage
                         fi
 
-                        gsatellite/interface/qhold "$_jobId"
-                        exit
+                        _functionCall="gsatellite/interface/qhold $_jobId"
+                        break
                 else
                         #  duplicate usage of this parameter
                         echo "$_program: The option \"$_option\" cannot be used multiple times!" 1>&2
@@ -375,8 +375,8 @@ while [[ "$1" != "" ]]; do
 				exit $_gsatctl_exit_usage
                         fi
 
-                        gsatellite/interface/qrls "$_jobId"
-                        exit
+                        _functionCall="gsatellite/interface/qrls $_jobId"
+			break
                 else
                         #  duplicate usage of this parameter
                         echo "$_program: The option \"$_option\" cannot be used multiple times!" 1>&2
@@ -413,6 +413,15 @@ while [[ "$1" != "" ]]; do
         fi
 
 done
+
+if gsatellite/interface/compRunning "gsatlc"; then
+
+	# execute function call
+	$_functionCall
+else
+	echo "$_program: gsatlc is not running. Start it with \`gsatlcd --start'." 1>&2
+	exit 1
+fi
 
 exit
 
