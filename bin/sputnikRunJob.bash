@@ -181,7 +181,7 @@ runJob() {
 	date +%s >> "$_jobDir/job.start"
 
         #  save job's PID
-        echo "$_jobPid" > "$__GLOBAL__jobPidFile"
+        echo "$_jobPid" > "$_jobDir/job.pid"
 
 	_message="STARTED;"
 
