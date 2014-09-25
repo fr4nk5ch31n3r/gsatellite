@@ -354,9 +354,16 @@ gsatellite/interface/qdel()
         #  Integrated second possible path which checks directly if a job is
         #+ running or has a valid job id without interacting with gsatlc. This
         #+ saves some cycles.
-        if ! gschedule/isValidJobId "$_jobId" || gschedule/isRunningJob "$_jobId"; then
+        if ! gschedule/isValidJobId "$_jobId"; then
+
                 #  retreat
-                echo "$_program[$_selfName]: qdel failed!" 1>&2
+                echo "$_program[$_selfName]: Invalid job id \"$_jobId\"!" 1>&2
+                return 1
+
+	elif gschedule/isRunningJob "$_jobId"; then
+
+		#  retreat
+                echo "$_program[$_selfName]: Cannot remove a running job! Try to hold the job first." 1>&2
                 return 1
         else
 
@@ -403,7 +410,8 @@ gsatellite/interface/qdel()
                 local _receivedCommand=${_receivedMessage%%;*}
 
                 if [[ "$_receivedCommand" != "OK" ]]; then
-                        echo "$_program[$_selfName]: qdel failed!" 1>&2
+
+                        echo "$_program[$_selfName]: gsatlc wasn't able to remove the job!" 1>&2
                         ipc/file/removeMsgBox "$_tempMsgBox"
                         return 1
                 else
