@@ -5,7 +5,7 @@
 :<<COPYRIGHT
 
 Copyright (C) 2012 Frank Scheiner
-Copyright (C) 2013, 2014 Frank Scheiner, HLRS, Universitaet Stuttgart
+Copyright (C) 2013-2015 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -33,9 +33,10 @@ umask 0077
 _DEBUG="0"
 
 readonly _program=$( basename "$0" )
-readonly _gsatctlVersion="0.3.0"
+readonly _gsatctlVersion="0.4.0"
 
 readonly _gsatctl_exit_usage=64
+readonly _gsatctl_exit_unavailable=69
 readonly _gsatctl_exit_ok=0
 
 readonly _true=1
@@ -119,7 +120,6 @@ Usage: gsatctl --qsub jobFile
    or: gsatctl --qhold jobId
    or: gsatctl --qrls jobId
    or: gsatctl --qdel jobId
-   or: gsatctl --qstat [jobState]
 Try \`$_program --help' for more information.
 USAGE
 
@@ -140,8 +140,7 @@ gsatctl [options]
 DESCRIPTION:
 
 gsatctl - the gsatellite controller - is the user interface to gsatellite. It
-allows for job submission and manipulation. It can also show information about
-all gsatellite jobs.
+allows for job submission and manipulation.
 
 OPTIONS:
 
@@ -154,9 +153,6 @@ OPTIONS:
 -d, --qdel jobId        Remove a job identified by its job id from gsatellite.
                         This only works for jobs that are not already in the
                         running state.
-
--l, --qstat [jobState]  List all jobs which are in the state jobState, or if
-                        jobState is not provided, list all jobs.
 
 -w, --qwait jobId       Wait for the job specified by its job id to exit and
                         return its exit value.
@@ -171,7 +167,6 @@ gqsub jobFile
 qghold jobId
 gqrls jobId
 gqdel jobId
-gqstat [jobState]
 gqwait jobId
 
 HELP
@@ -193,10 +188,6 @@ gsatctl/versionMsg()
 
 # Short hands
 case $( basename "$0" ) in
-"gqstat")
-	exec gsatctl --qstat "$@"
-	;;
-
 "gqhold")
 	exec gsatctl --qhold "$@"
 	;;
@@ -242,7 +233,6 @@ while [[ "$1" != "" ]]; do
                 "$1" != "--qhold" && "$1" != "-h" && \
                 "$1" != "--qrls" && "$1" != "-r" && \
                 "$1" != "--qdel" && "$1" != "-d" && \
-                "$1" != "--qstat" && "$1" != "-l" && \
                 "$1" != "--qwait" && "$1" != "-w" \
 	]]; then
 		#  no, so output a usage message
@@ -307,30 +297,6 @@ while [[ "$1" != "" ]]; do
 	                #  duplicate usage of this parameter
 	                echo "$_program: The option \"$_option\" cannot be used multiple times!" 1>&2
 	                gsatctl/usageMsg
-			exit $_gsatctl_exit_usage
-                fi
-
-        #  "--qstat|-l [jobState]"
-        elif [[ "$1" == "--qstat" || "$1" == "-l" ]]; then
-                _option="$1"
-                if [[ "$_jobStateSet" != "0" ]]; then
-                        shift 1
-                        #  next positional parameter an option or an option parameter?
-                        if [[ ! "$1" =~ ^-.* && "$1" != "" ]]; then
-                                _jobState="$1"
-                                _jobStateSet="0"
-                                shift 1
-                        else
-                                _jobState="all"
-                                _jobStateSet="0"
-                        fi
-
-                        _functionCall="gsatellite/interface/qstat $_jobState"
-                        break
-                else
-                        #  duplicate usage of this parameter
-                        echo "$_program: The option \"$_option\" cannot be used multiple times!" 1>&2
-                        gsatctl/usageMsg
 			exit $_gsatctl_exit_usage
                 fi
 
@@ -420,7 +386,7 @@ if gsatellite/interface/compRunning "gsatlc"; then
 	$_functionCall
 else
 	echo "$_program: gsatlc is not running. Start it with \`gsatlcd --start'." 1>&2
-	exit 1
+	exit $_gsatctl_exit_unavailable
 fi
 
 exit
