@@ -151,6 +151,25 @@ runJob() {
 	local _execHost=$( utils/getHostName )
 	local _path="$PATH"
 
+	########################################################################
+	# Add per job type env variables
+	local _perJobTypeEnvFile="${_jobDir}/perJobType.env"
+	local _jobType=$( jobTypes/getJobType "$_job" )
+
+	case $_jobType in
+
+	# Use default GSI proxy credential
+	gtransfer|tgftp)
+		cat > "$_perJobTypeEnvFile" <<-EOF
+		export X509_USER_PROXY="$HOME/.gsatellite/tmp/defaultGsiProxyCredential"
+		EOF
+		;;
+	*)
+		:
+		;;
+	esac
+	########################################################################
+
 	#echo "($$) [runJob] DEBUG: " 1>&2
 
         #  create additional environment
@@ -165,6 +184,12 @@ runJob() {
 	export GSAT_O_HOST="$_execHost"
 	export GSAT_O_PATH="$_path"
 	EOF
+
+	# Add per job type environment
+	if [[ -e "$_perJobTypeEnvFile" ]]; then
+		cat "$_perJobTypeEnvFile" >> "$_environmentFile"
+		rm "$_perJobTypeEnvFile"
+	fi
 
 	. "$_environmentFile"
 
