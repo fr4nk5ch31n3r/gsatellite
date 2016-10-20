@@ -28,15 +28,17 @@ elif [[ "$1" == "--stop" ]]; then
 elif [[ "$1" == "--status" ]]; then
 
 	_gsatlcHostName=$( cat $HOME/.gsatellite/gsatlcHostName 2>/dev/null )
+	_gsatlcPid=$( cat $HOME/.gsatellite/gsatlcPid 2>/dev/null )
 	
-	if [[ "$_gsatlcHostName" != "" ]]; then
+	if [[ "$_gsatlcHostName" != "" && \
+              "$_gsatlcPid" != "" ]]; then
+
 		echo "gsatlc hostname=\"$_gsatlcHostName\""
-		
-		_gsatlcPid=$( cat $HOME/.gsatellite/gsatlcPid 2>/dev/null )
-	
-		if [[ "$_gsatlcPid" != "" ]]; then
-			echo "gsatlc PID=\"$_gsatlcPid\""
-		fi
+		echo "gsatlc PID=\"$_gsatlcPid\""
+
+		exit 0
+	else
+		exit 1
 	fi
 else
         echo "usage: gsatlcd {--start|--stop|--status}"
