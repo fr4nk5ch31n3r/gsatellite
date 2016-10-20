@@ -4,7 +4,7 @@
 :<<COPYRIGHT
 
 Copyright (C) 2012, 2013 Frank Scheiner
-Copyright (C) 2014, 2016 Frank Scheiner, HLRS, Universitaet Stuttgart
+Copyright (C) 2014, 2015, 2016 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -27,7 +27,7 @@ COPYRIGHT
 # DEFINES
 ################################################################################
 
-readonly _gschedule_version="0.3.0"
+readonly _gschedule_version="0.4.0"
 readonly _selfName="gsatellite/gschedule"
 
 # maximum number of job restarts
@@ -210,9 +210,12 @@ gschedule/prepareJob()
         local _jobDir="$_gscheduleBaseDir/jobs/$_jobId.d"
         mkdir "$_jobDir"
 
+	local _jobType=$( jobTypes/getJobType "$_job" )
+
         echo "$_jobId" > "$_jobDir/jobId"
 	echo "$_jobId" > "$_jobDir/job.id"
 	echo "$_jobName" > "$_jobDir/job.name"
+	echo "$_jobType" > "$_jobDir/job.type"
 
         # place a copy of the job in "jobtmp" in the "jobs" dir
         mkdir "$_jobDir/jobtmp"
