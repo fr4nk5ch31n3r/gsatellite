@@ -5,7 +5,7 @@
 :<<COPYRIGHT
 
 Copyright (C) 2012 Frank Scheiner
-Copyright (C) 2013, 2014 Frank Scheiner, HLRS, Universitaet Stuttgart
+Copyright (C) 2013, 2014, 2016 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -29,6 +29,8 @@ umask 0077
 _DEBUG="0"
 
 _program=$( basename "$0" )
+
+readonly _run_services_version="0.2.0"
 
 export _notificationEmailAddress="$HOME/.gsatellite/myEmailAddress"
 
@@ -75,10 +77,17 @@ _environment="$2"
 
 _servicesBaseDir="$3"
 
+_jobExitValue="$4"
+
 ################################################################################
 
 #  export event
 export GSAT_EVENT="$_event"
+
+if [[ "$_jobExitValue" != "" ]]; then
+
+	export GSAT_JOB_EXIT_VALUE="$_jobExitValue"
+fi
 
 #  source environment
 . "$_environment"

@@ -4,7 +4,7 @@
 :<<COPYRIGHT
 
 Copyright (C) 2012, 2013 Frank Scheiner
-Copyright (C) 2014 Frank Scheiner, HLRS, Universitaet Stuttgart
+Copyright (C) 2014, 2016 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -27,7 +27,7 @@ COPYRIGHT
 # DEFINES
 ################################################################################
 
-readonly _gschedule_version="0.2.0"
+readonly _gschedule_version="0.3.0"
 readonly _selfName="gsatellite/gschedule"
 
 # maximum number of job restarts
@@ -685,12 +685,24 @@ gschedule/onEvent()
 
         # maybe also provide the return/exit value of the corresponding action
         # or job
-        #local _returnValue="$3"
 
-        # call user or system provided scripts from service dir named after the triggered event
-        "$_GSAT_LIBEXECPATH"/run-services "$_event" "$_environment" "${_GSAT_LIBEXECPATH}/services/on${_event}" &
+	if [[ "$3" != "" ]]; then
 
-        "$_GSAT_LIBEXECPATH"/run-services "$_event" "$_environment" "${HOME}/.gsatellite/services/on${_event}" &
+	        local _returnValue="$3"
+	fi
+
+	if [[ "$_returnValue" == "" ]]; then
+
+	        # call user or system provided scripts from service dir named after the triggered event
+	        "$_GSAT_LIBEXECPATH"/run-services "$_event" "$_environment" "${_GSAT_LIBEXECPATH}/services/on${_event}" &
+
+	        "$_GSAT_LIBEXECPATH"/run-services "$_event" "$_environment" "${HOME}/.gsatellite/services/on${_event}" &
+	else
+		# call user or system provided scripts from service dir named after the triggered event
+	        "$_GSAT_LIBEXECPATH"/run-services "$_event" "$_environment" "${_GSAT_LIBEXECPATH}/services/on${_event}" "$_returnValue" &
+
+	        "$_GSAT_LIBEXECPATH"/run-services "$_event" "$_environment" "${HOME}/.gsatellite/services/on${_event}" "$_returnValue" &
+	fi
 
         return
 }

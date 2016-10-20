@@ -20,6 +20,7 @@
 #  Available environment variables provided by run-services:
 #+
 #+ GSAT_EVENT:     the triggering event
+#+ GSAT_JOB_EXIT_VALUE: the exit value of the job (for JOB_TERMINATION events only!)
 
 
 #  Available utility/helper functions provided by run-services:
@@ -29,14 +30,27 @@
 
 umask 0077
 
-#  Create mail body
-cat > /tmp/${GSAT_O_LOGNAME}_${GSAT_O_JOBID}.mailbody <<-EOF
-	Event: $GSAT_EVENT 
-	Job name: $GSAT_JOBNAME
-	Job id: $GSAT_O_JOBID
-	Executed on: $GSAT_O_HOST
-	Paths used: $GSAT_O_PATH
-EOF
+if [[ "$GSAT_EVENT" == "JOB_TERMINATION" ]]; then
+
+	#  Create mail body w/exit value
+	cat > /tmp/${GSAT_O_LOGNAME}_${GSAT_O_JOBID}.mailbody <<-EOF
+		Event: $GSAT_EVENT
+		Job exit value: $GSAT_JOB_EXIT_VALUE
+		Job name: $GSAT_JOBNAME
+		Job id: $GSAT_O_JOBID
+		Executed on: $GSAT_O_HOST
+		Paths used: $GSAT_O_PATH
+	EOF
+else
+	#  Create mail body w/o exit value
+	cat > /tmp/${GSAT_O_LOGNAME}_${GSAT_O_JOBID}.mailbody <<-EOF
+		Event: $GSAT_EVENT
+		Job name: $GSAT_JOBNAME
+		Job id: $GSAT_O_JOBID
+		Executed on: $GSAT_O_HOST
+		Paths used: $GSAT_O_PATH
+	EOF
+fi
 
 mail -s "[GSAT] $GSAT_O_JOBID => $GSAT_EVENT" $( __getEmailAddress ) < /tmp/${GSAT_O_LOGNAME}_${GSAT_O_JOBID}.mailbody
 
