@@ -5,7 +5,7 @@
 :<<COPYRIGHT
 
 Copyright (C) 2012 Frank Scheiner
-Copyright (C) 2013, 2014 Frank Scheiner, HLRS, Universitaet Stuttgart
+Copyright (C) 2013-2015 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -28,7 +28,7 @@ COPYRIGHT
 # DEFINES
 ################################################################################
 
-readonly _gsatellite_interface_version="0.2.0"
+readonly _gsatellite_interface_version="0.3.0"
 readonly _selfName="gsatellite/interface"
 
 ################################################################################
@@ -455,6 +455,61 @@ gsatellite/interface/listJobsInState()
 }
 
 
+# Public: List gsatellite jobs in specified state and with specified job type.
+#
+# $1 (_jobState) - Desired job state (string)
+# $2 (_jobType)  - Desired job type (string)
+#
+# Returns 0 on success.
+gsatellite/interface/listJobs()
+{
+        local _jobState="$1"
+        local _jobType="$2"
+
+        if [[ "$_jobState" == "all" && \
+              "$_jobType" == "all" ]]; then
+
+              gsatellite/interface/listAllJobs
+              return
+        fi
+
+        if [[ "$_jobState" == "all" ]]; then
+
+		_jobsBaseDir="$_gscheduleBaseDir/jobs"
+	else
+		_jobsBaseDir="$_gscheduleBaseDir/$_jobState"
+	fi
+
+        #  right-bound text output (default!)
+        printf "%12s %6s %24s %24s\n" "job.state" "job.id" "job.execHost" "job.name"
+        echo -e "------------ ------ ------------------------ ------------------------"
+
+	#                 returns file names without path prefix!
+        for _jobDir in $( ls -1 "$_jobsBaseDir" ); do
+
+                #echo "($$) DEBUG: _jobDir=\"$_jobDir\""
+
+		local _currentJobType=$( cat "$_jobsBaseDir/$_jobDir/job.type" 2>/dev/null )
+		if [[ "$_currentJobType" != "$_jobType" && \
+		      "$_jobType" != "all" ]]; then
+
+			continue
+		fi
+
+                local _currentJobId=$( basename "$_jobsBaseDir/$_jobDir" )
+                _curentJobId=${_jobId%.d}
+                local _currentJobHost=$( cat "$_jobsBaseDir/$_jobDir/job.execHost" 2>/dev/null )
+                local _currentJobState=$( cat "$_jobsBaseDir/$_jobDir/job.state" 2>/dev/null )
+                local _currentJobName=$( basename $( readlink "$_jobsBaseDir/$_jobDir/$_jobId" ) )
+
+		#  left-bound text output ("-"!)
+		printf '%-12s %-6s %-24s %-24s\n' "${_currentJobState::12}" "${_currentJobId::6}" "${_currentJobHost::24}" "${_currentJobName::24}"
+        done
+
+        return
+}
+
+
 # Public: List all gsatellite jobs.
 #
 # Returns 0 on success.
@@ -487,25 +542,54 @@ gsatellite/interface/listAllJobs()
 # Public: Show information/statistics about jobs.
 #
 # $1 (_jobState) - Desired job state (string).
+# $2 (_jobType)  - Desired job type (string).
 #
-# Returns 0 on success, 1 otherwise.
+# Returns 0 on success, 1 if an unknown job state was used.
 gsatellite/interface/qstat()
 {
         local _jobState="$1"
+        local _jobType="$2"
 
-        if [[ "$_jobState" == "all" ]]; then
+	# check if job state is known
+	if [[ "$_jobState" != "queued" && \
+              "$_jobState" != "running" && \
+              "$_jobState" != "finished" && \
+              "$_jobState" != "failed" && \
+              "$_jobState" != "held" && \
+              "$_jobState" != "all" ]]; then
+
+		echo "$_program[$_selfName]: Unknown job state -- '$_jobState'." 1>&2
+		return 1
+	fi
+
+        # job type is not checked, because job types are usually only used to
+        # enable special behaviour during job handling and life cycle. Hence
+        # there are no invalid job types.
+
+	# same cases as in `../../bin/gqstat.bash`:
+	# case 0
+	if [[ "$_jobState" != "all" && \
+	      "$_jobType" != "all" ]]; then
+
+		gsatellite/interface/listJobs "$_jobState" "$_jobType"
+
+	# case 1
+	elif [[ "$_jobState" != "all" && \
+                "$_jobType" == "all" ]]; then
+
+		gsatellite/interface/listJobs "$_jobState" "all"
+
+	# case 2
+        elif [[ "$_jobState" == "all" && \
+                "$_jobType" != "all" ]]; then
+
+		gsatellite/interface/listJobs "all" "$_jobType"
+
+	# case 3
+	elif [[ "$_jobState" == "all" && \
+                "$_jobType" == "all" ]]; then
 
                 gsatellite/interface/listAllJobs
-
-        elif [[ "$_jobState" == "ready" || \
-                "$_jobState" == "running" || \
-                "$_jobState" == "finished" || \
-                "$_jobState" == "failed" ]]; then
-
-                gsatellite/interface/listJobsInState "$_jobState"
-        else
-		echo "$_program[$_selfName]: Unknown job state -- '$_jobState'." 1>&2
-                return 1
         fi
 
         return    

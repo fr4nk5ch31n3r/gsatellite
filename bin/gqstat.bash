@@ -6,7 +6,7 @@
 :<<COPYRIGHT
 
 Copyright (C) 2013 Frank Scheiner
-Copyright (C) 2013, 2014 Frank Scheiner, HLRS, Universitaet Stuttgart
+Copyright (C) 2013-2015 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -34,7 +34,7 @@ umask 0077
 _DEBUG="0"
 
 readonly _program=$( basename "$0" )
-readonly _gqstatVersion="0.2.0"
+readonly _gqstatVersion="0.3.0"
 
 readonly _gqstat_exit_usage=64
 readonly _gqstat_exit_ok=0
@@ -131,7 +131,7 @@ gqstat/usageMsg()
 {
 
 	cat >&2 <<-USAGE
-	Usage: $_program [-f [jobId]] [-s jobState]
+	Usage: $_program [-f [jobId]] [-s jobState] [-t jobType]
 	Try \`$_program --help' for more information.
 	USAGE
 
@@ -162,6 +162,16 @@ gqstat/helpMsg()
 
 	[-s, --job-state jobState]
 	                        Filter listing by given job state.
+
+	                        Valid job states are:
+	                        * queued
+	                        * running
+	                        * finished
+	                        * failed
+	                        * held
+
+	[-t, --job-type jobType]
+	                        Filter listing by given job type.
 
 	[-V, --version]         Display version information and exit.
 
@@ -374,24 +384,61 @@ while [[ "$1" != "" ]]; do
 				gqstat/usageMsg
 				exit $_gqstat_exit_usage
                         fi
-
                 else
                         # duplicate usage of this parameter
                         echo "$_program: The option \"$_option\" cannot be used multiple times!" 1>&2
                         gqstat/usageMsg
                         exit $_gqstat_exit_usage
                 fi
-	fi
 
+	# "-t"
+	elif [[ "$1" == "-t" || "$1" == "--job-type" ]]; then
+		_option="$1"
+		if [[ "$_jobTypeSet" != "$_true" ]]; then
+			shift 1
+			# next positional parameter an option or an option parameter?
+			if [[ ! "$1" =~ ^-.* && "$1" != "" ]]; then
+				_jobType="$1"
+				_jobTypeSet="$_true"
+				shift 1
+			else
+				echo "$_program: Missing argument for option \"$_option\"!" 1>&2
+				gqstat/usageMsg
+				exit $_gqstat_exit_usage
+			fi
+		else
+			# duplicate usage of this parameter
+			echo "$_program: The option \"$_option\" cannot be used multiple times!" 1>&2
+			gqstat/usageMsg
+			exit $_gqstat_exit_usage
+		fi
+	fi
 done
 
 
 if [[ "$_mode" == "list" ]]; then
 
-	if [[ "$_jobStateSet" == "$_true" ]]; then
-		gsatellite/interface/qstat "$_jobState"
+	# case 0
+	if [[ "$_jobStateSet" == "$_true" && \
+	      "$_jobTypeSet" == "$_true" ]]; then
+
+		gsatellite/interface/qstat "$_jobState" "$_jobType"
+
+	# case 1
+	elif [[ "$_jobStateSet" == "$_true" && \
+	        "$_jobTypeSet" != "$_true" ]]; then
+
+		gsatellite/interface/qstat "$_jobState" "all"
+
+	# case 2
+	elif [[ "$_jobStateSet" != "$_true" && \
+	        "$_jobTypeSet" == "$_true" ]]; then
+
+		gsatellite/interface/qstat "all" "$_jobType"
+
+	# case 3
 	else
-		gsatellite/interface/qstat "all"
+		gsatellite/interface/qstat "all" "all"
 	fi
 
 elif [[ "$_mode" == "listDetailed" ]]; then
