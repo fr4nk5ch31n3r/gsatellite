@@ -5,6 +5,11 @@
 
 if [[ "$1" == "--start" ]]; then
 
+	if $0 --status &>/dev/null; then
+
+		exit
+	fi
+
         if [[ ! -e $HOME/.gsatellite/var/log ]]; then
                 mkdir -p $HOME/.gsatellite/var/log
         fi
