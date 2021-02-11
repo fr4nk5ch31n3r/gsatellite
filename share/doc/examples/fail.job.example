@@ -1,0 +1,9 @@
+#!/bin/bash
+
+# always fail
+
+sleep 20
+
+/bin/false
+
+exit

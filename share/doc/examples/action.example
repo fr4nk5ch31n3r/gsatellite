@@ -1,0 +1,14 @@
+#!/bin/bash
+
+# action - exemplary action script, that touches a file every 4 seconds as long
+# as it is running.
+
+touch "/tmp/myFile_$$"
+
+while [[ 1 ]]; do
+	sleep 4
+	touch "/tmp/myFile_$$"
+done
+
+exit
+

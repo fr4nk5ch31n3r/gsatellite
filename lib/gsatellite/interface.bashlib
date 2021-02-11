@@ -1,0 +1,671 @@
+#!/bin/bash
+
+# interface - gsatellite interface library
+
+:<<COPYRIGHT
+
+Copyright (C) 2012 Frank Scheiner
+Copyright (C) 2013-2015, 2021 Frank Scheiner, HLRS, Universitaet Stuttgart
+
+The program is distributed under the terms of the GNU General Public License
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+COPYRIGHT
+
+################################################################################
+# DEFINES
+################################################################################
+
+readonly _gsatellite_interface_version="0.4.0"
+readonly _selfName="gsatellite/interface"
+
+# see `/usr/include/sysexits.h`
+readonly _exit_ok=0
+readonly _exit_usage=64
+readonly _exit_software=70
+
+################################################################################
+# EXTERNAL VARIABLES
+################################################################################
+
+# _LIB
+# _program
+
+################################################################################
+# INCLUDES
+################################################################################
+
+_neededLibraries=( "gsatellite/ipc/file/sigfwd.bashlib"
+		    "gsatellite/utils.bashlib"
+		    "gsatellite/gsatlc.bashlib" )
+
+for _library in ${_neededLibraries[@]}; do
+
+	if ! . "$_LIB/$_library"; then
+		echo "$_program[$_selfName]: Library \"$_LIB/$_library\" couldn't be read or is corrupted." 1>&2
+		exit $_exit_software
+	fi
+done
+
+################################################################################
+# FUNCTIONS
+################################################################################
+
+# Public: Check if given gsat component is running (somewhere in the cluster).
+#
+# $1 (_gsatComponent) - Gsatellite component (string: "gsatlc", "sigfwd") to
+#                       check .
+#
+# Returns 0 if gsat component is active, 1 if not.
+gsatellite/interface/compRunning()
+{
+	local _gsatComponent="$1"
+
+	if [[ "$_gsatComponent" == "gsatlc" ]]; then
+
+		# first check if the gsatlc PID file and the file containing the
+		# corresponding hostname are existing at all
+		if [[ ! -e "$_gsatBaseDir/gsatlcHostName" ||
+		      ! -e "$_gsatBaseDir/gsatlcPid" ]]; then
+			return 1
+		else
+			local _gsatlcHostName=$( cat "$_gsatBaseDir/gsatlcHostName" )
+			local _gsatlcPid=$( cat "$_gsatBaseDir/gsatlcPid" )
+
+			local _messageBox="$_MBOXES/$_gsatlcHostName/$_gsatlcPid.inbox"
+
+			# if the PID file exists, check that the last modify is no
+			# longer ago than 5 seconds
+			local _currentTime=$( date +%s )
+			local _fileTimeOfLastModify=$( stat -c %Z "$_gsatBaseDir/gsatlcPid" )
+
+			if [[ $(( $_currentTime - $_fileTimeOfLastModify )) -gt 5 ]]; then
+				return 1
+			else
+				return 0
+			fi
+	        fi
+
+		# TODO:
+		# Interesting questions to solve:
+		# * What happens if the local node is separated from the cluster
+		#   and gsatlc is still running remotely?
+		#
+		# => Assumption: If the local node is separated from the cluster
+		#                the home filesystem is not usable at all and
+		#                hence no work can be done locally anyhow.
+
+	elif [[ "$_gsatComponent" == "sigfwd" ]]; then
+		# TODO:
+		# Implementation.
+		:
+	else
+		return 1
+	fi
+}
+
+
+# Public: Submit job to gsatellite.
+#
+# $1 (_job) - Job file (string) to submit.
+#
+# Returns 0 on success, 1 otherwise.
+gsatellite/interface/qsub()
+{
+        local _job="$1"
+
+        # add absolute path if needed
+        if [[ ${_job:0:1} != "/" ]]; then
+                _job="$PWD/$_job"
+        elif [[ ${_job:0:2} == "./" ]]; then
+                _job="${PWD}${_job#.}"
+        fi
+
+        # If job's not existing, retreat.
+        if [[ ! -e "$_job" ]]; then
+                echo "$_program[$_selfName]: Job not existing!" 1>&2
+                return 1
+        fi
+
+        local _tempMsgBox=$( ipc/file/createTempMsgBox )
+
+        # send qsub command to gsatlc
+        local _message="QSUB $_job;$_tempMsgBox"
+
+        # TODO:
+        # Cover the case when gsatlc is not running! Also for other qx
+        # functions!
+        local _gsatlcHostName=$( cat "$_gsatBaseDir/gsatlcHostName" )
+        local _gsatlcPid=$( cat "$_gsatBaseDir/gsatlcPid" )
+        local _messageBox="$_MBOXES/$_gsatlcHostName/$_gsatlcPid.inbox"
+
+        if ! ipc/file/sendMsg "$_messageBox" "$_message"; then
+                echo "$_program[$_selfName]: ipc/file/sendMsg() failed!" 1>&2
+                return 1
+        fi
+
+        local _signal="SIGCONT"
+
+        # wake gsatlc with signal forwarding
+        ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal"
+        if [[ "$?" != "0" ]]; then
+                echo "$_program[$_selfName]: ipc/file/sigfwd/forwardSignal() failed!" 1>&2
+                return 1
+        fi
+
+        local _receivedMessage=""
+
+        while [[ 1 ]]; do
+                # touch it first, so changes on other hosts are propagated
+                touch --no-create "$_tempMsgBox"
+                if ipc/file/messageAvailable "$_tempMsgBox"; then
+                        # This does not work!
+                        #local _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
+                        # without "local" keyword, it works
+                        _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
+
+                        if [[ $? -eq 0 ]]; then
+                                utils/debugEcho "_receivedMessage=\"$_receivedMessage\""
+                                break
+                        fi
+                else
+                        sleep 0.5
+                fi
+        done
+
+        local _receivedCommand=${_receivedMessage%%;*}
+
+        utils/debugEcho "_receivedMessage=\"$_receivedMessage\""
+        utils/debugEcho "_receivedCommand=\"$_receivedCommand\""
+
+        if [[ "$_receivedCommand" == "qsub failed" ]]; then
+                echo "$_program[$_selfName]: qsub failed!" 1>&2
+                ipc/file/removeMsgBox "$_tempMsgBox"
+                return 1
+        else
+                echo "$_receivedCommand"
+                ipc/file/removeMsgBox "$_tempMsgBox"
+                return 0
+        fi
+
+}
+
+
+# Public: Put a hold on a gsatellite job.
+#
+# $1 (_jobId) - Id (number) of the job.
+#
+# Returns 0 on success, 1 otherwise.
+gsatellite/interface/qhold()
+{
+        local _jobId="$1"
+
+        # TODO:
+        # Only hold jobs, that are in state "queued" or "running". And also
+        # introduce second path that avoids message communication.
+
+        local _tempMsgBox=$( ipc/file/createTempMsgBox )
+
+        # send qhold command to gsatlc
+        local _message="QHOLD $_jobId;$_tempMsgBox"
+
+        local _gsatlcHostName=$( cat "$_gsatBaseDir/gsatlcHostName" )
+        local _gsatlcPid=$( cat "$_gsatBaseDir/gsatlcPid" )
+        local _messageBox="$_MBOXES/$_gsatlcHostName/$_gsatlcPid.inbox"
+
+        if ! ipc/file/sendMsg "$_messageBox" "$_message"; then
+                echo "$_program[$_selfName]: ipc/file/sendMsg() failed!" 1>&2
+                return 1
+        fi
+
+        local _signal="SIGCONT"
+
+        # wake gsatlc with signal forwarding
+        ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal" || \
+        (echo "$_program[$_selfName]: ipc/file/sigfwd/forwardSignal() failed!" 1>&2 && return 1)
+
+        local _receivedMessage=""
+
+        while [[ 1 ]]; do
+                # touch it first, so changes on other hosts are propagated
+                touch --no-create "$_tempMsgBox"
+                if ipc/file/messageAvailable "$_tempMsgBox"; then
+                        # This does not work!
+                        #local _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
+                        # without "local" keyword, it works
+                        _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
+
+                        if [[ $? -eq 0 ]]; then
+                                utils/debugEcho "_receivedMessage=\"$_receivedMessage\""
+                                break
+                        fi
+                else
+                        sleep 0.5
+                fi
+        done
+
+        local _receivedCommand=${_receivedMessage%%;*}
+
+        utils/debugEcho "_receivedMessage=\"$_receivedMessage\""
+        utils/debugEcho "_receivedCommand=\"$_receivedCommand\""
+
+        if [[ "$_receivedCommand" != "OK" ]]; then
+                echo "$_program[$_selfName]: qhold failed!" 1>&2
+                ipc/file/removeMsgBox "$_tempMsgBox"
+                return 1
+        else
+                ipc/file/removeMsgBox "$_tempMsgBox"
+                return 0
+        fi
+
+}
+
+
+# Public: Send a signal to a gsatellite job.
+#
+# $1 (_signal) - Signal (string) to send to the gsatellite job.
+# $2 (_jobId)  - Id (number) of the job.
+#
+# Returns 0 on success, 1 otherwise.
+gsatellite/interface/qsig()
+{
+	local _signal="$1"
+	local _jobId="$2"
+
+	# TODO:
+	# Only hold jobs, that are in state "queued" or "running". And also
+	# introduce second path that avoids message communication.
+
+	local _tempMsgBox=$( ipc/file/createTempMsgBox )
+
+	# send qhold command to gsatlc
+	local _message="QSIG $_signal $_jobId;$_tempMsgBox"
+
+	local _gsatlcHostName=$( cat "$_gsatBaseDir/gsatlcHostName" )
+	local _gsatlcPid=$( cat "$_gsatBaseDir/gsatlcPid" )
+	local _messageBox="$_MBOXES/$_gsatlcHostName/$_gsatlcPid.inbox"
+
+	if ! ipc/file/sendMsg "$_messageBox" "$_message"; then
+		echo "$_program[$_selfName]: ipc/file/sendMsg() failed!" 1>&2
+		return 1
+	fi
+
+	local _signal="SIGCONT"
+
+	# wake gsatlc with signal forwarding
+	ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal" || \
+	(echo "$_program[$_selfName]: ipc/file/sigfwd/forwardSignal() failed!" 1>&2 && return 1)
+
+	local _receivedMessage=""
+
+	while [[ 1 ]]; do
+		# touch it first, so changes on other hosts are propagated
+		touch --no-create "$_tempMsgBox"
+		if ipc/file/messageAvailable "$_tempMsgBox"; then
+			_receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
+
+			if [[ $? -eq 0 ]]; then
+				utils/debugEcho "_receivedMessage=\"$_receivedMessage\""
+				break
+			fi
+		else
+			sleep 0.5
+		fi
+	done
+
+	local _receivedCommand=${_receivedMessage%%;*}
+
+	utils/debugEcho "_receivedMessage=\"$_receivedMessage\""
+	utils/debugEcho "_receivedCommand=\"$_receivedCommand\""
+
+	if [[ "$_receivedCommand" != "OK" ]]; then
+		echo "$_program[$_selfName]: qsig failed!" 1>&2
+		ipc/file/removeMsgBox "$_tempMsgBox"
+		return 1
+	else
+		ipc/file/removeMsgBox "$_tempMsgBox"
+		return 0
+	fi
+}
+
+
+# Public: Release a hold on a gsatellite job.
+#
+# $1 (_jobId) - Id (number) of the job.
+#
+# Returns 0 on success, 1 otherwise.
+gsatellite/interface/qrls()
+{
+        local _jobId="$1"
+
+        # Integrated second possible path which checks directly if a job is
+        # running without interacting with gsatlc. This saves some cycles.
+        if [[ $( gschedule/getJobState "$_jobId" ) != "held" ]]; then
+                # retreat
+                echo "$_program[$_selfName]: qrls failed! Job \"$_jobId\" not in held state!" 1>&2
+                return 1
+        else
+
+                local _tempMsgBox=$( ipc/file/createTempMsgBox )
+
+                # send qhold command to gsatlc
+                local _message="QRLS $_jobId;$_tempMsgBox"
+
+                local _gsatlcHostName=$( cat "$_gsatBaseDir/gsatlcHostName" )
+                local _gsatlcPid=$( cat "$_gsatBaseDir/gsatlcPid" )
+                local _messageBox="$_MBOXES/$_gsatlcHostName/$_gsatlcPid.inbox"
+
+                if ! ipc/file/sendMsg "$_messageBox" "$_message"; then
+                        echo "$_program[$_selfName]: ipc/file/sendMsg() failed!" 1>&2
+                        return 1
+                fi
+
+                local _signal="SIGCONT"
+
+                # wake gsatlc with signal forwarding
+                ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal" || \
+                (echo "$_program[$_selfName]: ipc/file/sigfwd/forwardSignal() failed!" 1>&2 && return 1)
+
+                local _receivedMessage=""
+
+                while [[ 1 ]]; do
+                        # touch it first, so changes on other hosts are propagated
+                        touch --no-create "$_tempMsgBox"
+                        if ipc/file/messageAvailable "$_tempMsgBox"; then
+                                # This does not work!
+                                #local _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
+                                # without "local" keyword, it works
+                                _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
+
+                                if [[ $? -eq 0 ]]; then
+                                        utils/debugEcho "_receivedMessage=\"$_receivedMessage\""
+                                        break
+                                fi
+                        else
+                                sleep 0.5
+                        fi
+                done
+
+                local _receivedCommand=${_receivedMessage%%;*}
+
+                utils/debugEcho "_receivedMessage=\"$_receivedMessage\""
+                utils/debugEcho "_receivedCommand=\"$_receivedCommand\""
+
+                if [[ "$_receivedCommand" != "OK" ]]; then
+                        echo "$_program[$_selfName]: qrls failed!" 1>&2
+                        ipc/file/removeMsgBox "$_tempMsgBox"
+                        return 1
+                else
+                        ipc/file/removeMsgBox "$_tempMsgBox"
+                        return 0
+                fi
+        fi
+}
+
+
+# Public: Remove a job from gsatellite.
+#
+# $1 (_jobId) - Id (number) of the job.
+#
+# Returns 0 on success, 1 otherwise.
+gsatellite/interface/qdel()
+{
+        local _jobId="$1"
+
+        #  Integrated second possible path which checks directly if a job is
+        #+ running or has a valid job id without interacting with gsatlc. This
+        #+ saves some cycles.
+        if ! gschedule/isValidJobId "$_jobId"; then
+
+                #  retreat
+                echo "$_program[$_selfName]: Invalid job id \"$_jobId\"!" 1>&2
+                return 1
+
+	elif gschedule/isRunningJob "$_jobId"; then
+
+		#  retreat
+                echo "$_program[$_selfName]: Cannot remove a running job! Try to hold the job first." 1>&2
+                return 1
+        else
+
+                local _tempMsgBox=$( ipc/file/createTempMsgBox )
+
+                #  send qdel command to gsatlc
+                local _message="QDEL $_jobId;$_tempMsgBox"
+
+                local _gsatlcHostName=$( cat "$_gsatBaseDir/gsatlcHostName" )
+                local _gsatlcPid=$( cat "$_gsatBaseDir/gsatlcPid" )
+                local _messageBox="$_MBOXES/$_gsatlcHostName/$_gsatlcPid.inbox" 
+
+                if ! ipc/file/sendMsg "$_messageBox" "$_message"; then
+                        echo "$_program[$_selfName]: ipc/file/sendMsg failed!" 1>&2
+                        return 1
+                fi
+
+                local _signal="SIGCONT"
+
+                #  wake qsatlc with signal forwarding
+                ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal" || \
+                (echo "$_program[$_selfName]: ipc/file/sigfwd/forwardSignal() failed!" 1>&2 && return 1)
+
+                local _receivedMessage=""
+
+                while [[ 1 ]]; do
+                        #  touch it first, so changes on other hosts are propagated
+                        touch --no-create "$_tempMsgBox"
+                        if ipc/file/messageAvailable "$_tempMsgBox"; then
+                                #  This does not work!
+                                #local _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
+                                #  without "local" keyword, it works
+                                _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
+
+                                if [[ $? -eq 0 ]]; then
+                                        utils/debugEcho "_receivedMessage=\"$_receivedMessage\""
+                                        break
+                                fi
+                        else
+                                sleep 0.5
+                        fi
+                done
+
+                local _receivedCommand=${_receivedMessage%%;*}
+
+                if [[ "$_receivedCommand" != "OK" ]]; then
+
+                        echo "$_program[$_selfName]: gsatlc wasn't able to remove the job!" 1>&2
+                        ipc/file/removeMsgBox "$_tempMsgBox"
+                        return 1
+                else
+                        ipc/file/removeMsgBox "$_tempMsgBox"
+                        return 0
+                fi
+        fi
+
+        return
+
+}
+
+
+# Public: List gsatellite jobs in specified state.
+#
+# $1 (_jobState) - Desired job state (string)
+#
+# Returns 0 on success.
+gsatellite/interface/listJobsInState()
+{
+        local _jobState="$1"
+
+        #  right-bound text output (default!)
+        printf "%12s %6s %24s %24s\n" "job.state" "job.id" "job.execHost" "job.name"
+        echo -e "------------ ------ ------------------------ ------------------------"
+
+        for _jobDir in $( ls -1 "$_gscheduleBaseDir/$_jobState" ); do
+
+                utils/debugEcho "_jobDir=\"$_jobDir\""
+
+                local _jobId=$( basename "$_gscheduleBaseDir/$_jobState/$_jobDir" )
+                _jobId=${_jobId%.d}
+                local _jobHost=$( cat "$_gscheduleBaseDir/jobs/$_jobDir/job.execHost" 2>/dev/null )
+                local _jobName=$( basename $( readlink "$_gscheduleBaseDir/$_jobState/$_jobDir/$_jobId" ) )
+
+                #  left-bound text output ("-"!)
+                printf '%-12s %-6s %-24s %-24s\n' "${_jobState::12}" "${_jobId::6}" "${_jobHost::24}" "${_jobName::24}"
+        done
+
+        return
+}
+
+
+# Public: List gsatellite jobs in specified state and with specified job type.
+#
+# $1 (_jobState) - Desired job state (string)
+# $2 (_jobType)  - Desired job type (string)
+#
+# Returns 0 on success.
+gsatellite/interface/listJobs()
+{
+        local _jobState="$1"
+        local _jobType="$2"
+
+        if [[ "$_jobState" == "all" && \
+              "$_jobType" == "all" ]]; then
+
+              gsatellite/interface/listAllJobs
+              return
+        fi
+
+        if [[ "$_jobState" == "all" ]]; then
+
+		_jobsBaseDir="$_gscheduleBaseDir/jobs"
+	else
+		_jobsBaseDir="$_gscheduleBaseDir/$_jobState"
+	fi
+
+        #  right-bound text output (default!)
+        printf "%12s %6s %24s %24s\n" "job.state" "job.id" "job.execHost" "job.name"
+        echo -e "------------ ------ ------------------------ ------------------------"
+
+	#                 returns file names without path prefix!
+        for _jobDir in $( ls -1 "$_jobsBaseDir" ); do
+
+                utils/debugEcho "_jobDir=\"$_jobDir\""
+
+		local _currentJobType=$( cat "$_jobsBaseDir/$_jobDir/job.type" 2>/dev/null )
+		if [[ "$_currentJobType" != "$_jobType" && \
+		      "$_jobType" != "all" ]]; then
+
+			continue
+		fi
+
+                local _currentJobId=$( basename "$_jobsBaseDir/$_jobDir" )
+                _curentJobId=${_jobId%.d}
+                local _currentJobHost=$( cat "$_jobsBaseDir/$_jobDir/job.execHost" 2>/dev/null )
+                local _currentJobState=$( cat "$_jobsBaseDir/$_jobDir/job.state" 2>/dev/null )
+                local _currentJobName=$( basename $( readlink "$_jobsBaseDir/$_jobDir/$_jobId" ) )
+
+		#  left-bound text output ("-"!)
+		printf '%-12s %-6s %-24s %-24s\n' "${_currentJobState::12}" "${_currentJobId::6}" "${_currentJobHost::24}" "${_currentJobName::24}"
+        done
+
+        return
+}
+
+
+# Public: List all gsatellite jobs.
+#
+# Returns 0 on success.
+gsatellite/interface/listAllJobs()
+{
+        #  perhaps locking needed before listing?
+
+        #  right-bound text output (default!)
+        printf "%12s %6s %24s %24s\n" "job.state" "job.id" "job.execHost" "job.name"
+        echo -e "------------ ------ ------------------------ ------------------------"
+
+        for _jobDir in $( ls -1 "$_gscheduleBaseDir/jobs" ); do
+
+                utils/debugEcho "jobDir=\"$_jobDir\""
+
+                local _jobId=$( basename "$_gscheduleBaseDir/jobs/$_jobDir" )
+                _jobId=${_jobId%.d}
+                local _jobState=$( cat "$_gscheduleBaseDir/jobs/$_jobDir/job.state" 2>/dev/null )
+                local _jobHost=$( cat "$_gscheduleBaseDir/jobs/$_jobDir/job.execHost" 2>/dev/null )
+                local _jobName=$( basename $( readlink "$_gscheduleBaseDir/jobs/$_jobDir/$_jobId" ) )
+
+                #  left-bound text output ("-"!)
+                printf '%-12s %-6s %-24s %-24s\n' "${_jobState::12}" "${_jobId::6}" "${_jobHost::24}" "${_jobName::24}"
+        done
+
+        return
+}
+
+
+# Public: Show information/statistics about jobs.
+#
+# $1 (_jobState) - Desired job state (string).
+# $2 (_jobType)  - Desired job type (string).
+#
+# Returns 0 on success, 1 if an unknown job state was used.
+gsatellite/interface/qstat()
+{
+        local _jobState="$1"
+        local _jobType="$2"
+
+	# check if job state is known
+	if [[ "$_jobState" != "queued" && \
+              "$_jobState" != "running" && \
+              "$_jobState" != "finished" && \
+              "$_jobState" != "failed" && \
+              "$_jobState" != "held" && \
+              "$_jobState" != "all" ]]; then
+
+		echo "$_program[$_selfName]: Unknown job state -- '$_jobState'." 1>&2
+		return 1
+	fi
+
+        # job type is not checked, because job types are usually only used to
+        # enable special behaviour during job handling and life cycle. Hence
+        # there are no invalid job types.
+
+	# same cases as in `../../bin/gqstat.bash`:
+	# case 0
+	if [[ "$_jobState" != "all" && \
+	      "$_jobType" != "all" ]]; then
+
+		gsatellite/interface/listJobs "$_jobState" "$_jobType"
+
+	# case 1
+	elif [[ "$_jobState" != "all" && \
+                "$_jobType" == "all" ]]; then
+
+		gsatellite/interface/listJobs "$_jobState" "all"
+
+	# case 2
+        elif [[ "$_jobState" == "all" && \
+                "$_jobType" != "all" ]]; then
+
+		gsatellite/interface/listJobs "all" "$_jobType"
+
+	# case 3
+	elif [[ "$_jobState" == "all" && \
+                "$_jobType" == "all" ]]; then
+
+                gsatellite/interface/listAllJobs
+        fi
+
+        return    
+
+}
+

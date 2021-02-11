@@ -32,7 +32,7 @@ INCLUDE
 #  VARIABLES
 ################################################################################
 
-readonly _jobTypes_default_version="0.1.0"
+readonly _jobTypes_default_version="0.2.0"
 
 #  Default jobs are held by signalling SIGTERM
 _jobTypes_default_holdSignal="SIGTERM"
@@ -43,6 +43,15 @@ _jobTypes_default_holdSignal="SIGTERM"
 
 :<<FUNCTIONS
 FUNCTIONS
+
+
+jobTypes/default/getHoldSignal()
+{
+	echo "$_jobTypes_default_holdSignal"
+	
+	return
+}
+
 
 jobTypes/default/evaluateExitValue()
 {

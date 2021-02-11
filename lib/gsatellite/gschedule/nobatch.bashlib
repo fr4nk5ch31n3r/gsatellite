@@ -1,9 +1,11 @@
 #!/bin/bash
-#  gschedule/nobatch.bashlib - non batch scheduler for gsatellite
+
+# gschedule/nobatch.bashlib - non batch scheduler for gsatellite
 
 :<<COPYRIGHT
 
 Copyright (C) 2012 Frank Scheiner
+Copyright (C) 2014 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -22,61 +24,66 @@ The program is distributed under the terms of the GNU General Public License
 
 COPYRIGHT
 
+################################################################################
+# DEFINES
+################################################################################
+
+readonly _gsatellite_gschedule_nobatch_version="0.2.0"
+readonly _gsatellite_gschedule_nobatch_selfName="gsatellite/gschedule/nobatch"
 readonly _thisScheduler="nobatch"
 
-:<<INCLUDE
-../gschedule.bashlib
-INCLUDE
-
-:<<FUNCTIONS
-gschedule/$_thisScheduler/schedule
-gschedule/$_thisScheduler/usageMsg
-gschedule/$_thisScheduler/helpMsg
-gschedule/$_thisScheduler/versionMsg
-FUNCTIONS
-
-. "$_LIB"/gschedule.bashlib
-
+################################################################################
+# EXTERNAL VARIABLES
 ################################################################################
 
-_gscheduleNobatchVersion="0.0.1"
+# _LIB
 
 ################################################################################
+# INCLUDES
+################################################################################
 
-gschedule/nobatch/isRunableJob() {
-        #  can we run the given job?
-        #
-        #  usage:
-        #+ gschedule/nobatch/isRunableJob job
+. "$_LIB"/gsatellite/gschedule.bashlib 2>/dev/null
 
-        #  this is the NON BATCH scheduler, hence all jobs can run at once.
+################################################################################
+# FUNCTIONS
+################################################################################
 
-        #  check if job is valid?
+# Public: Determine if given job is runable. Fo the nobatch scheduler all jobs
+#         are runable.
+#
+# Always returns 0.
+gschedule/nobatch/isRunableJob()
+{
+        # This is the NON BATCH scheduler, hence all jobs can run at once.
 
+        # TODO:
+        # Check if job is valid?
         return 0
 }
 
-gschedule/nobatch/schedule() {
-        #  schedule job
-        #
-        #  usage:
-        #+ gschedule/nobatch/schedule [job]
 
+# Public: Schedule given job. If job is not provided do nothing.
+#
+# $1 (_job) - The job (string) to schedule. (OPTIONAL)
+#
+# Return 0 on success, 1 otherwise.
+gschedule/nobatch/schedule()
+{
         local _jobId=""
 
         if [[ "$1" != "" ]]; then
 
                 local _job="$1"
 
-                #  get id for job
+                # get id for job
                 _jobId=$( gschedule/getJobId "$_job" )
 
                 gschedule/prepareJob "$_job" "$_jobId"
 
-                #  scheduling decision
+                # scheduling decision
                 if gschedule/nobatch/isRunableJob "$_job"; then
 
-                        #  gschedule/startJob
+                        # gschedule/startJob
                         #local _sputnikPid=$( gschedule/startJob "$_jobId" )
                         gschedule/startJob "$_jobId"
 
@@ -100,65 +107,11 @@ gschedule/nobatch/schedule() {
                 fi
 
         else
-                #  Do nothing. This is the nobatch scheduler, so jobs are started
-                #+ directly after submission. Hence no scheduling needed after
-                #+ a job is finished.
+                # Do nothing. This is the nobatch scheduler, so jobs are started
+                # directly after submission. Hence no scheduling needed after a
+                # job is finished.
                 :
                 return
         fi
-}
-
-################################################################################
-#  Functions below are not needed any longer!
-
-gschedule/nobatch/usageMsg() {
-
-    cat <<-USAGE
-
-    usage: gschedule [--help] ||
-           gschedule -f, --job jobFile
-
-    --help gives more information
-
-USAGE
-
-    return
-}
-
-
-gschedule/nobatch/helpMsg() {
-    
-    cat <<-HELP
-
-$( gschedule/nobatch/versionMsg )
-
-SYNOPSIS:
-
-gschedule [options]
-
-DESCRIPTION:
-
-gschedule is the job scheduler for gsatellite and is configured for NON BATCH
-scheduling. This means that jobs are started directly after submission and are
-not queued.
-
-OPTIONS:
-
--f, --job jobFile       Set the job (file) that is to be scheduled.
-
-[--help]                Display this help and exit.
-
-[-V, --version]         Display version information and exit.
-
-HELP
-
-    return
-}
-
-gschedule/nobatch/versionMsg() {
-
-        echo "gschedule v$_gscheduleVersion (NOBATCH scheduler v$_gscheduleNobatchVersion)"
-
-        return
 }
 

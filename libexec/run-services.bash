@@ -5,6 +5,7 @@
 :<<COPYRIGHT
 
 Copyright (C) 2012 Frank Scheiner
+Copyright (C) 2013, 2014, 2016 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -29,6 +30,10 @@ _DEBUG="0"
 
 _program=$( basename "$0" )
 
+readonly _run_services_version="0.2.0"
+
+export _notificationEmailAddress="$HOME/.gsatellite/myEmailAddress"
+
 ################################################################################
 #  FUNCTIONS
 ################################################################################
@@ -43,7 +48,23 @@ _program=$( basename "$0" )
 
 __getEmailAddress()
 {
-	echo "mail@localhost"
+	local _emailAddress=""
+	
+	# use user provided notifcation email address if existing...
+	if [[ -e "$_notificationEmailAddress" && \
+	      -s "$_notificationEmailAddress" ]]; then
+
+		_emailAddress=$( cat "$_notificationEmailAddress" )
+	
+	# ...and if not (or if file is empty) just use local user name, which should direct mails to
+	# the local account's mailbox.
+	else
+		_emailAddress=$( whoami )
+	fi
+
+	
+	echo "$_emailAddress"
+	
 	return
 }
 export -f __getEmailAddress
@@ -56,10 +77,17 @@ _environment="$2"
 
 _servicesBaseDir="$3"
 
+_jobExitValue="$4"
+
 ################################################################################
 
 #  export event
 export GSAT_EVENT="$_event"
+
+if [[ "$_jobExitValue" != "" ]]; then
+
+	export GSAT_JOB_EXIT_VALUE="$_jobExitValue"
+fi
 
 #  source environment
 . "$_environment"

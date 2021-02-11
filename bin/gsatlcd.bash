@@ -5,6 +5,11 @@
 
 if [[ "$1" == "--start" ]]; then
 
+	if $0 --status &>/dev/null; then
+
+		exit
+	fi
+
         if [[ ! -e $HOME/.gsatellite/var/log ]]; then
                 mkdir -p $HOME/.gsatellite/var/log
         fi
@@ -24,9 +29,24 @@ elif [[ "$1" == "--stop" ]]; then
         else
                 exit 1
         fi
+        
+elif [[ "$1" == "--status" ]]; then
 
+	_gsatlcHostName=$( cat $HOME/.gsatellite/gsatlcHostName 2>/dev/null )
+	_gsatlcPid=$( cat $HOME/.gsatellite/gsatlcPid 2>/dev/null )
+	
+	if [[ "$_gsatlcHostName" != "" && \
+              "$_gsatlcPid" != "" ]]; then
+
+		echo "gsatlc hostname=\"$_gsatlcHostName\""
+		echo "gsatlc PID=\"$_gsatlcPid\""
+
+		exit 0
+	else
+		exit 1
+	fi
 else
-        echo "usage: gsatlcd {--start|--stop}"
+        echo "usage: gsatlcd {--start|--stop|--status}"
         exit 1
 fi
 

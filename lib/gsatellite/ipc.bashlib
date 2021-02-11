@@ -1,0 +1,215 @@
+#!/bin/bash
+
+# ipc.bashlib - utility functions for IPC
+
+:<<COPYRIGHT
+
+Copyright (C) 2012 Frank Scheiner
+Copyright (C) 2014 Frank Scheiner, HLRS, Universitaet Stuttgart
+
+The program is distributed under the terms of the GNU General Public License
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+COPYRIGHT
+
+################################################################################
+# DEFINES
+################################################################################
+
+_gsatellite_ipc_version="0.2.0"
+
+################################################################################
+# INCLUDES
+################################################################################
+
+################################################################################
+# FUNCTIONS
+################################################################################
+
+################################################################################
+# There are rumours that "mkdir" could be non-atomic on NFS, but "symlink" could
+# be (even on old NFS versions). See [1] and [2] for details.
+#
+# [1] <http://en.wikipedia.org/wiki/Wikipedia:Reference_desk/Archives/Computing/2009_April_2#Atomic_operations_on_NFS>
+# [2] <http://stackoverflow.com/questions/185451/quick-and-dirty-way-to-ensure-only-one-instance-of-a-shell-script-is-running-at-a/327991#327991>
+################################################################################
+ipc/lockWithDir()
+{
+	#  lock a shared resource
+	#
+	#  usage:
+	#+ ipc/lockWithDir resource
+
+	local _resource="$1"
+
+	# the lock link will be created in the same path as the resource that is
+	# to be locked
+	local _lockDir="$_resource.d"
+
+	trap 'rmdir "$_lockDir" &>/dev/null' SIGINT
+
+	# NOTICE:
+	# mkdir is used here, because the OS kernel ensures that mkdir
+	# does an atomic check-and-create.
+	if mkdir "$_lockDir" &>/dev/null; then
+	ls "$_lockDir" &>/dev/null
+	return 0
+	else
+	return 1
+	fi
+}
+
+
+ipc/unlockWithDir()
+{
+	#  unlock a shared resource
+	#
+	#  usage:
+	#+ ipc/unlockWithDir resource
+
+	local _resource="$1"
+
+	local _lockDir="$_resource.d"
+
+	trap 'rmdir "$_lockDir" &>/dev/null' SIGINT
+
+	if rmdir "$_lockDir" &>/dev/null; then
+
+		ls "$_lockDir" &>/dev/null
+		return 0
+	else
+		return 1
+	fi
+}
+################################################################################
+
+# TODO:
+# Perhaps read and write locks could also be helpful in addition to the
+# exclusive locks implemented currently.
+
+# Public: Lock a shared resource by using a symlink as lockfile.
+#
+# $1 (_resource) - The shared resource (string) to be locked.
+#
+# Returns 0 on success, 1 otherwise.
+ipc/lockWithSymlink()
+{
+	#  lock a shared resource
+	#
+	#  usage:
+	#+ ipc/lockWithSymlink resource
+
+	# alternative (un)locking with symlinks
+	local _resource="$1"
+
+	if [[ ! -e "$_resource" ]]; then
+
+		return 1
+	fi
+
+	# the lock link will be created in the same path as the resource that is
+	# to be locked
+	local _lockLink="$_resource.lock"
+
+	trap 'mv "$_lockLink" "$_lockLink.unlocked" &>/dev/null && rm "$_lockLink.unlocked" &>/dev/null' SIGINT
+
+	# TODO:
+	# Shouldn't we use the full path to the resource?
+	# Shouldn' we store the lock in a special lock dir?
+	if ln -s "$( basename $_resource )" "$_lockLink" &>/dev/null; then
+
+		#while ! ls "$_lockLink" &>/dev/null; do
+		#    sleep 0.1
+		#done
+		return 0
+	else
+		return 1
+	fi
+
+	return
+}
+
+
+# Public: Unock a shared resource by using a symlink as lockfile.
+#
+# $1 (_resource) - The shared resource (string) to be unlocked.
+#
+# Returns 0 on success, 1 otherwise.
+ipc/unlockWithSymlink()
+{
+        #  unlock a shared resource
+        #
+        #  usage:
+        #+ ipc/unlockWithSymlink resource
+
+        #  alternative (un)locking with symlinks
+        local _resource="$1"
+
+        #  disabled, as it would otherwise not be possible to remove a resource
+        #+ before unlocking it.
+        #if [[ ! -e "$_resource" ]]; then
+        #    return 1
+        #fi
+
+        local _lockLink="$_resource.lock"
+
+        trap 'mv "$_lockLink" "$_lockLink.unlocked" &>/dev/null && rm "$_lockLink.unlocked" &>/dev/null' SIGINT
+
+        #  mv (rename) should be atomic on NFS, rm might not be atomic on NFS.
+        if mv "$_lockLink" "$_lockLink.unlocked" &>/dev/null && rm -f "$_lockLink.unlocked" &>/dev/null; then
+
+                #while ls "$_lockLink" &>/dev/null; do
+                #    sleep 0.1
+                #done
+                return 0
+        else
+                return 1
+        fi
+}
+
+
+# Public: Shorthand for locking.
+#
+# For parameters and return values see the respective function.
+ipc/lock()
+{
+        #  lock a shared resource
+        #
+        #  usage:
+        #+ ipc/lock resource
+
+        #ipc/lockWithDir $@
+        ipc/lockWithSymlink $@
+
+        return
+}
+
+
+# Public: Shorthand for unlocking.
+#
+# For parameters and return values see the respective function.
+ipc/unlock()
+{
+        #  unlock a shared resource
+        #
+        #  usage:
+        #+ ipc/unlock resource
+
+        #ipc/unlockWithDir $@
+        ipc/unlockWithSymlink $@
+
+        return
+}
+

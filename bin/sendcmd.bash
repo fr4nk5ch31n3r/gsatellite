@@ -1,10 +1,11 @@
 #!/bin/bash
 
-#  sendcmd.bash - send command test program
+# sendcmd.bash - send command test program
 
 :<<COPYRIGHT
 
 Copyright (C) 2011, 2012 Frank Scheiner
+Copyright (C) 2013, 2014 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -25,81 +26,115 @@ COPYRIGHT
 
 umask 0077
 
-_DEBUG="0"
+################################################################################
+# DEFINES
+################################################################################
 
-#  path to configuration files (prefer system paths!)
-#  For native OS packages:
+readonly _program=$( basename "$0" )
+
+readonly _sendcmdVersion="0.4.0"
+
+readonly _sendcmd_exit_software=70
+readonly _sendcmd_exit_usage=64
+readonly _sendcmd_exit_ok=0
+
+readonly _true=1
+readonly _false=0
+
+################################################################################
+# EXTERNAL VARIABLES
+################################################################################
+
+#_GSAT_DEBUG
+
+################################################################################
+# PATH CONFIGURATION
+################################################################################
+
+# path to configuration files (prefer system paths!)
+# For native OS packages:
 if [[ -e "/etc/gsatellite" ]]; then
-        _gsatConfigurationFilesPath="/etc/gsatellite"
+        _configurationFilesPath="/etc/gsatellite"
+        _installBasePath="/usr"
+        _libBasePath="$_installBasePath/share"
+        _libexecBasePath="$_installBasePath/libexec/gsatellite"
 
-#  For installation with "install.sh".
+# For installation with "install.sh".
 #sed#elif [[ -e "<PATH_TO_GSATELLITE>/etc" ]]; then
-#sed#	_gsatConfigurationFilesPath="<PATH_TO_GSATELLITE>/etc"
+#sed#	_configurationFilesPath="<PATH_TO_GSATELLITE>/etc"
 
-#  According to FHS 2.3, configuration files for packages located in "/opt" have
-#+ to be placed here (if you use a provider super dir below "/opt" for the
-#+ gtransfer files, please also use the same provider super dir below
-#+ "/etc/opt").
+# According to FHS 2.3, configuration files for packages located in "/opt" have
+# to be placed here (if you use a provider super dir below "/opt" for the
+# gtransfer files, please also use the same provider super dir below
+# "/etc/opt").
 #elif [[ -e "/etc/opt/<PROVIDER>/gsatellite" ]]; then
-#	_gsatConfigurationFilesPath="/etc/opt/<PROVIDER>/gsatellite"
+#	 _configurationFilesPath="/etc/opt/<PROVIDER>/gsatellite"
+#        _installBasePath="/opt/<PROVIDER>/gsatellite"
+#        _libBasePath="$_installBasePath/lib"
+#        _libexecBasePath="$_installBasePath/libexec"
 elif [[ -e "/etc/opt/gsatellite" ]]; then
-        _gsatConfigurationFilesPath="/etc/opt/gsatellite"
+        _configurationFilesPath="/etc/opt/gsatellite"
+        _installBasePath="/opt/gsatellite"
+        _libBasePath="$_installBasePath/lib"
+        _libexecBasePath="$_installBasePath/libexec"
 
-#  For user install in $HOME:
-elif [[ -e "$HOME/.gsatellite" ]]; then
-        _gsatConfigurationFilesPath="$HOME/.gsatellite"
+# For git deploy, use $BASH_SOURCE
+elif [[ -e "$( dirname $BASH_SOURCE )/../etc" ]]; then
+	_configurationFilesPath="$( dirname $BASH_SOURCE )/../etc"
+	_installBasePath="$( dirname $BASH_SOURCE )/../"
+	_libBasePath="$_installBasePath/lib"
+        _libexecBasePath="$_installBasePath/libexec"
 fi
 
-_gsatPathsConfigurationFile="$_gsatConfigurationFilesPath/paths.conf"
+_pathsConfigurationFile="$_configurationFilesPath/paths.conf"
 
-#  include path config or fail with EX_SOFTWARE = 70, internal software error
-#+ not related to OS
-if ! . "$_gsatPathsConfigurationFile"; then
-	echo "($_program) E: Paths configuration file couldn't be read or is corrupted." 1>&2
-	exit 70
+# include path config or fail with EX_SOFTWARE = 70, internal software error
+# not related to OS
+if ! . "$_pathsConfigurationFile"; then
+	echo "$_program: Paths configuration file couldn't be read or is corrupted." 1>&2
+	exit $_sendcmd_exit_software
 fi
 
-#. "$_LIB"/ipc.bashlib
-#. "$_LIB"/ipc/file.bashlib
-. "$_LIB"/ipc/file/sigfwd.bashlib
-. "$_LIB"/gsatlc.bashlib
+readonly _LIB="$_libBasePath"
+readonly _GSAT_LIBEXECPATH="$_libexecBasePath"
 
 ################################################################################
-
-_sendcmdVersion="0.1.0" 
-
+# INCLUDES
 ################################################################################
 
-sendcmd/processMsg() {
-        local _message="$1"
+_neededLibraries=( "gsatellite/ipc/file/sigfwd.bashlib"
+		   "gsatellite/gsatlc.bashlib"
+		   "gsatellite/utils.bashlib" )
 
-        local _answer=$( echo "$_message" | cut -d ';' -f 1 )
-        local _answerBox=$( echo "$_message" | cut -d ';' -f 2 )
+for _library in "${_neededLibraries[@]}"; do
 
-        echo "($$) I: answer \"$_answer\" from box \"$_answerBox\"."
+	if ! . "$_LIB"/"$_library"; then
+		echo "$_program: Library \""$_LIB"/"$_library"\" couldn't be read or is corrupted." 1>&2
+		exit $_sendcmd_exit_software
+	fi
+done
 
-        return
-}
 
+################################################################################
+# FUNCTIONS
+################################################################################
 
-sendcmd/usageMsg() {
+sendcmd/usageMsg()
+{
 
         cat <<-USAGE
-
-usage: sendcmd [--help]
-       sendcmd --command command --message-box messageBox [--no-sigfwd] [--no-wait-for-answer]
-
---help gives more information
-
+Usage: sendcmd --command command --message-box messageBox [--no-sigfwd] [--no-wait-for-answer]
+Try \`$_program --help' for more information.
 USAGE
 
         return
 }
 
-sendcmd/helpMsg() {
+
+sendcmd/helpMsg()
+{
     
         cat <<-HELP
-
 $( sendcmd/versionMsg )
 
 SYNOPSIS:
@@ -129,182 +164,190 @@ OPTIONS:
 -m, --message-box messageBox
                         Specify the message box to send the command to.
 
-[--no-sigfwd]           Disable signal forwarding during send.
+[--no-sigfwd]           Disable signal forwarding during send (e.g. when
+                        contacting the signal forwarder (sigfwd) itself)
 
 [--no-wait-for-answer]  Don't wait for an answer after sending a command.
-
-[--debug]               Enable debug mode.
 
 [--help]                Display this help and exit.
 
 [-V, --version]         Display version information and exit.
-
 HELP
 
         return
 }
 
-sendcmd/versionMsg() {
 
-        echo "sendcmd v$_sendcmdVersion"
+sendcmd/versionMsg()
+{
+
+        echo "$_program v$_sendcmdVersion"
 
         return
 }
 
+
+# Public: Process a received message.
+#
+# $1 (_message) - File (string) containing the message.
+sendcmd/processMsg()
+{
+        local _message="$1"
+
+        local _answer=$( echo "$_message" | cut -d ';' -f 1 )
+        local _answerBox=$( echo "$_message" | cut -d ';' -f 2 )
+
+        if [[ $_GSAT_DEBUG -eq 1 ]]; then
+		echo "$_program: answer \"$_answer\" from box \"$_answerBox\"."
+        else
+		echo "$_answer"
+        fi
+
+        return
+}
+
+
+# Private: Perform cleanup on exit.
+sendcmd/onExit()
+{
+	# remove message boxes
+	ipc/file/removeMsgBox "$_inbox"
+
+	return
+}
+
+################################################################################
+# MAIN
 ################################################################################
 
-#  setup trap to remove inbox on exit
-trap 'ipc/file/removeLocalMsgBoxByName "$_inboxName"' EXIT
+# setup trap to remove inbox on exit
+trap 'sendcmd/onExit' EXIT
 
-################################################################################
+_noSignalForwarding=$_false
+_noWaitForAnswer=$_false
 
-_noSignalForwarding=0
-_noWaitForAnswer=0
-
-#  correct number of params?
-if [[ "$#" -lt "1" ]]; then
+# correct number of params?
+if [[ "$#" -lt 1 ]]; then
    # no, so output a usage message
    sendcmd/usageMsg
    exit 1
 fi
 
-_noWaitForAnswerSet=1
-_DEBUGSet=1
-
 # read in all parameters
 while [[ "$1" != "" ]]; do
 
-	#  only valid params used?
+	# only valid params used?
 	#
-	#  NOTICE:
-	#  This was added to prevent high speed loops
-	#+ if parameters are mispositioned.
+	# NOTICE:
+	# This was added to prevent high speed loops
+	# if parameters are mispositioned.
 	if [[   "$1" != "--help" && \
                 "$1" != "--version" && "$1" != "-V" && \
                 "$1" != "--command" && "$1" != "-c" && \
                 "$1" != "--message-box" && "$1" != "-m" && \
                 "$1" != "--no-sigfwd" && \
-                "$1" != "--no-wait-for-answer" && \
-                "$1" != "--debug" \
+                "$1" != "--no-wait-for-answer" \
         ]]; then
-		#  no, so output a usage message
+		# no, so output a usage message
 		sendcmd/usageMsg
-		exit 1   
+		exit $_sendcmd_exit_usage
 	fi
 
-	#  "--help"
+	# "--help"
 	if [[ "$1" == "--help" ]]; then
 		sendcmd/helpMsg
-		exit 0
+		exit $_sendcmd_exit_ok
 
-	#  "--version|-V"
+	# "--version|-V"
 	elif [[ "$1" == "--version" || "$1" == "-V" ]]; then
 		sendcmd/versionMsg
-		exit 0
+		exit $_sendcmd_exit_ok
 
-	#  "--command|-c command"
+	# "--command|-c command"
 	elif [[ "$1" == "--command" || "$1" == "-c" ]]; then
                 _option="$1"
-                if [[ "$_commandSet" != "0" ]]; then
+                if [[ $_commandSet -ne $_true ]]; then
 	                shift 1
-                        #  next positional parameter an option or an option parameter?
+                        # next positional parameter an option or an option parameter?
                         if [[ ! "$1" =~ ^-.* && "$1" != "" ]]; then
                                 _command="$1"
-                                _commandSet="0"
+                                _commandSet=$_true
                                 shift 1
                         else
-                                echo "E: missing option parameter for \"$_option\"!"
-                                exit 1
+                                echo "$_program: missing option parameter for option \"$_option\"!" 1>&2
+                                exit $_sendcmd_exit_usage
                         fi
                 else
-	                #  duplicate usage of this parameter
-	                echo "ERROR: The parameter \"--command|-c\" cannot be used multiple times!"
-	                exit 1
+	                # duplicate usage of this parameter
+	                echo "$_program: The option \"$_option\" cannot be used multiple times!" 1>&2
+	                exit $_sendcmd_exit_usage
                 fi
 
-        #  "--message-box|-m messageBox"
+        # "--message-box|-m messageBox"
 	elif [[ "$1" == "--message-box" || "$1" == "-m" ]]; then
                 _option="$1"
-                if [[ "$_messageBoxSet" != "0" ]]; then
+                if [[ $_messageBoxSet -ne $_true ]]; then
 	                shift 1
-                        #  next positional parameter an option or an option parameter?
+                        # next positional parameter an option or an option parameter?
                         if [[ ! "$1" =~ ^-.* && "$1" != "" ]]; then
                                 _messageBox="$1"
-                                _messageBoxSet="0"
+                                _messageBoxSet=$_true
                                 shift 1
                         else
-                                echo "E: missing option parameter for \"$_option\"!"
-                                exit 1
+                                echo "$_program: missing option parameter for option \"$_option\"!" 1>&2
+                                exit $_sendcmd_exit_usage
                         fi
                 else
-	                #  duplicate usage of this parameter
-	                echo "ERROR: The parameter \"--message-box|-m\" cannot be used multiple times!"
-	                exit 1
+	                # duplicate usage of this parameter
+	                echo "$_program: The option \"$_option\" cannot be used multiple times!" 1>&2
+	                exit $_sendcmd_exit_usage
                 fi
 
-        #  "--no-sigfwd"
+        # "--no-sigfwd"
 	elif [[ "$1" == "--no-sigfwd" ]]; then
                 _option="$1"
-                if [[ "$_noSignalForwardingSet" != "0" ]]; then
+                if [[ $_noSignalForwardingSet -ne $_true ]]; then
                         shift 1
-	                _noSignalForwarding="1"
-                        _noSignalForwardingSet="0"
+	                _noSignalForwarding=$_true
+                        _noSignalForwardingSet=$_true
                 else
-	                #  duplicate usage of this parameter
-	                echo "ERROR: The parameter \"--no-sigfwd\" cannot be used multiple times!"
-	                exit 1
+	                # duplicate usage of this parameter
+	                echo "$_program: The option \"$_option\" cannot be used multiple times!" 1>&2
+	                exit $_sendcmd_exit_usage
                 fi
 
-        #  "--no-wait-for-answer"
+        # "--no-wait-for-answer"
 	elif [[ "$1" == "--no-wait-for-answer" ]]; then
                 _option="$1"
-                if [[ "$_noWaitForAnswerSet" != "0" ]]; then
+                if [[ $_noWaitForAnswerSet -ne $_true ]]; then
                         shift 1
-	                _noWaitForAnswer="1"
-                        _noWaitForAnswerSet="0"
+	                _noWaitForAnswer=$_true
+                        _noWaitForAnswerSet=$_true
                 else
-	                #  duplicate usage of this parameter
-	                echo "ERROR: The parameter \"--no-wait-for-answer\" cannot be used multiple times!"
-	                exit 1
+	                # duplicate usage of this parameter
+	                echo "$_program: The option \"$_option\" cannot be used multiple times!" 1>&2
+	                exit $_sendcmd_exit_usage
                 fi
-
-        #  "--debug"
-	elif [[ "$1" == "--debug" ]]; then
-                _option="$1"
-                if [[ "$_DEBUGSet" != "0" ]]; then
-                        shift 1
-	                _DEBUG="1"
-                        _DEBUGSet="0"
-                else
-	                #  duplicate usage of this parameter
-	                echo "ERROR: The parameter \"--debug\" cannot be used multiple times!"
-	                exit 1
-                fi
-
         fi
 
 done
 
-#  check that all mandatory options are set
-if [[ $_commandSet -eq 0 && \
-      $_messageBoxSet -eq 0 \
+# check that all mandatory options are set
+if [[ $_commandSet -eq $_true && \
+      $_messageBoxSet -eq $_true \
 ]]; then
-        #  continue to "main()"
+        # continue
         :
 else
         sendcmd/usageMsg
-        exit 1
+        exit $_sendcmd_exit_usage
 fi
-
-################################################################################
-#  main()
-################################################################################
 
 _self="$$"
 
 _inboxName="$_self.inbox"
 
-#  create inbox
+# create inbox
 _inbox=$( ipc/file/createMsgBox "$_inboxName" )
 
 _contactHostName="$( ipc/file/getHostNameForMsgBox $_messageBox )"
@@ -312,53 +355,69 @@ _contactPid="$( ipc/file/getPidForMsgBox $_messageBox )"
 
 
 while [[ 1 ]]; do
-    #  TODO:
-    #+ Improve message format to also include an id, that could be used to
-    #+ identify answers to specific messages. This could be needed if answers
-    #+ come in asynchronously.
-    #+
-    #+ new format:
-    #+ "$_message;$_inbox;$_id"
-    ipc/file/sendMsg "$_messageBox" "$_command;$_inbox"
-    _retVal="$?"
-    if [[ "$_retVal" == "0" ]]; then
-        [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: sendMsg($_command;$_inbox) successful."
-        touch -mc "$_messageBox"
-        if [[ $_noSignalForwarding -eq 0 ]]; then
-                #  send SIGCONT to stop&go process (sputnik)
-                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: before forwardSignal()." 1>&2
-                ipc/file/sigfwd/forwardSignal "$_contactHostName" "$_contactPid" "SIGCONT"
-                if [[ "$?" != "0" ]]; then
-                    #  signal couldn't be delivered, perhaps contact is dead
-                    echo "E: Signal forwarding to contact \"$_contactPid\" on host \"$_contactHostName\" failed. Exiting." 1>&2
-                    exit 1
-                fi
-        fi
-        break
-    elif [[ "$_retVal" == "1" ]]; then
-        [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: sendMsg($_message;$_inbox) failed."
-        sleep 0.5
-        continue
-    elif [[ "$_retVal" == "2" ]]; then
-        echo "E: Message box \"$_messageBox\" not existing." 1>&2
-        exit 1
-    fi
+	# TODO:
+	# Improve message format to also include an id, that could be used to
+	# identify answers to specific messages. This could be needed if answers
+	# come in asynchronously.
+	#
+	# new format:
+	# "$_message;$_inbox;$_id"
+	ipc/file/sendMsg "$_messageBox" "$_command;$_inbox"
+	_retVal=$?
+
+	if [[ $_retVal -eq 0 ]]; then
+
+		utils/debugEcho "$_program: sendMsg($_command;$_inbox) successful."
+		touch -mc "$_messageBox"
+
+		if [[ $_noSignalForwarding -ne $_true ]]; then
+
+			# send SIGCONT to stop&go process (sputnik)
+			utils/debugEcho "$_program: before forwardSignal()."
+			ipc/file/sigfwd/forwardSignal "$_contactHostName" "$_contactPid" "SIGCONT"
+
+			if [[ $? -ne 0 ]]; then
+
+				# signal couldn't be delivered, perhaps contact is dead
+				echo "$_program: Signal forwarding to contact \"$_contactPid\" on host \"$_contactHostName\" failed. Exiting." 1>&2
+				exit 1
+			fi
+		fi
+		break
+
+	elif [[ $_retVal -eq 1 ]]; then
+
+		utils/debugEcho "$_program: sendMsg($_message;$_inbox) failed."
+		sleep 0.5
+		continue
+
+	elif [[ $_retVal -eq 2 ]]; then
+
+		echo "$_program: Message box \"$_messageBox\" not existing." 1>&2
+		exit 1
+	fi
 done
 
-#  should we wait for an answer?
-if [[ $_noWaitForAnswer -eq 0 ]]; then
-        #  yes
+# should we wait for an answer?
+if [[ $_noWaitForAnswer -ne $_true ]]; then
+
+        # yes
         while [[ 1 ]]; do
-                #  touch it first, so changes on other hosts are propagated
+
+                # touch it first, so changes on other hosts are propagated
                 touch --no-create "$_inbox"
+
                 if ipc/file/messageAvailable "$_inbox"; then
+
                         _answer=$( ipc/file/receiveMsg "$_inbox" )
-                        _retVal="$?"
-                        if [[ "$_retVal" == "0" ]]; then
-                                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: receiveMsg($_inbox) successful."
+                        _retVal=$?
+
+                        if [[ $_retVal -eq 0 ]]; then
+
+                                utils/debugEcho "$_program: receiveMsg($_inbox) successful."
                                 break
                         else
-                                [[ "$_DEBUG" == "1" ]] && echo "($$) DEBUG: receiveMsg($_inbox) failed."
+                                utils/debugEcho "$_program: receiveMsg($_inbox) failed."
                                 sleep 0.5
                         fi
                 else
@@ -369,6 +428,6 @@ if [[ $_noWaitForAnswer -eq 0 ]]; then
         sendcmd/processMsg "$_answer"
 fi
 
-#  no
+# no
 exit
 

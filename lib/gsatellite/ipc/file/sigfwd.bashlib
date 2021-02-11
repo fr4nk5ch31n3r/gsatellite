@@ -1,0 +1,293 @@
+#!/bin/bash
+
+# ipc/file/sigfwd.bashlib - utility functions for signal forwarding
+
+:<<COPYRIGHT
+
+Copyright (C) 2012 Frank Scheiner
+Copyright (C) 2013, 2014 Frank Scheiner, HLRS, Universitaet Stuttgart
+
+The program is distributed under the terms of the GNU General Public License
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+COPYRIGHT
+
+################################################################################
+# DEFINES
+################################################################################
+
+readonly _gsatellite_ipc_file_sigfwd_version="0.2.0"
+readonly _gsatellite_ipc_file_sigfwd_selfName="gsatellite/ipc/file/sigfwd"
+
+################################################################################
+# VARIABLES
+################################################################################
+
+_ipc_file_sigfwdInboxName="sigfwd.inbox"
+_ipc_file_sigfwdPid=""
+
+################################################################################
+# EXTERNAL VARIABLES
+################################################################################
+
+# _LIB
+# _program
+
+################################################################################
+# INCLUDES
+################################################################################
+
+. "$_LIB"/gsatellite/ipc/file.bashlib 2>/dev/null
+. "$_LIB"/gsatellite/utils.bashlib 2>/dev/null
+
+################################################################################
+# FUNCTIONS
+################################################################################
+
+################################################################################
+# Unused, maybe remove.
+
+ipc/file/sigfwd/startSigfwd()
+{
+        #  start "local" signal forwarder
+        #
+        #  usage:
+        #+ ipc/file/sigfwd/startSigfwd
+
+        sigfwd &
+
+        _ipc_file_sigfwdPid="$!"
+
+        echo "$_ipc_file_sigfwdPid"
+
+        return
+}
+
+
+ipc/file/sigfwd/stopSigfwd()
+{
+        #  stop "local" signal forwarder
+        #
+        #  usage:
+        #+ ipc/file/sigfwd/stopSigfwd
+
+        if [[ -n "$_ipc_file_sigfwdPid" ]]; then
+
+                /bin/kill "$_ipc_file_sigfwdPid"
+                return
+        else
+                return 2
+        fi
+}
+################################################################################
+
+# Public: Delegate action to signal forwarder. This allows the signal forwarder
+#         to execute actions on behalf of a pausing process.
+#
+# $1 (_hostName) - The host name (string) of the machine the signal forwarder is
+#                  running on.
+# $2 (_action)   - The file (string) that contains the action. The signal
+#                  forwarder will execute this file in the background.
+#
+# Prints the action ID and returns 0 on success, 1 otherwise.
+ipc/file/sigfwd/delegateAction()
+{
+	local _hostName="$1"
+	local _action="$2"
+
+	# use a temporary inbox when contacting the signal forwarder
+        local _answerBox=$( ipc/file/createTempMsgBox )
+
+        if [[ "$?" != "0" ]]; then
+
+                utils/debugEcho "$_program[$_gsatellite_ipc_file_sigfwd_selfName]: in delegateAction(): _answerBox=\"$_answerBox\" creation failed."
+                echo "$_program[$_gsatellite_ipc_file_sigfwd_selfName]: Temporary message box couldn't be created!" 1>&2
+                return 1
+        else
+                utils/debugEcho "$_program[$_gsatellite_ipc_file_sigfwd_selfName]: in delegateAction(): _answerBox=\"$_answerBox\""
+        fi
+
+	# TODO:
+	# How to support paths that include " " in dir names?
+        ipc/file/sendMsg "$_MBOXES/$_hostName/$_ipc_file_sigfwdInboxName" "DELEGATE_ACTION $_action;$_answerBox" || \
+        return 1
+
+	local _answer=""
+
+        while [[ 1 ]]; do
+                # touch it first, so changes on other hosts are propagated
+                touch --no-create "$_answerBox"
+                if ipc/file/messageAvailable "$_answerBox"; then
+
+                        _answer=$( ipc/file/receiveMsg "$_answerBox" )
+
+                        local _funcRetVal="$?"
+
+                        if [[ "$_funcRetVal" == "0" ]]; then
+
+                                utils/debugEcho "$_program[$_gsatellite_ipc_file_sigfwd_selfName]: in delegateAction(): received \"$_answer\""
+                                # print action ID
+                                echo ${answer%%;*}
+                                ipc/file/removeMsgBox "$_answerBox"
+                                break
+                        else
+                                utils/debugEcho "$_program[$_gsatellite_ipc_file_sigfwd_selfName]: in delegateAction(): receiveMsg didn't return \"0\""
+                        fi
+                else
+                        sleep 0.5
+                fi
+        done
+
+        return $_funcRetVal
+}
+
+
+# Public: Undelegate (stop) the action identified by the given PID.
+#
+# $1 (_hostName) - The host name (string) of the machine the signal forwarder is
+#                  running on.
+# $2 (_actionId) - A valid action ID (number).
+#
+# Returns 0 on success, 1 otherwise.
+ipc/file/sigfwd/undelegateAction()
+{
+	local _hostName="$1"
+	local _actionId="$2"
+
+	# use a temporary inbox when contacting the signal forwarder
+        local _answerBox=$( ipc/file/createTempMsgBox )
+
+        if [[ "$?" != "0" ]]; then
+
+                utils/debugEcho "$_program[$_gsatellite_ipc_file_sigfwd_selfName]: in undelegateAction(): _answerBox=\"$_answerBox\" creation failed."
+                echo "$_program[$_gsatellite_ipc_file_sigfwd_selfName]: Temporary message box couldn't be created!" 1>&2
+                return 1
+        else
+                utils/debugEcho "$_program[$_gsatellite_ipc_file_sigfwd_selfName]: in undelegateAction(): _answerBox=\"$_answerBox\""
+        fi
+
+	# TODO:
+	# How to support paths that include " " in dir names?
+        ipc/file/sendMsg "$_MBOXES/$_hostName/$_ipc_file_sigfwdInboxName" "UNDELEGATE_ACTION $_actionId;$_answerBox" || \
+        return 1
+
+	local _answer=""
+
+        while [[ 1 ]]; do
+                # touch it first, so changes on other hosts are propagated
+                touch --no-create "$_answerBox"
+                if ipc/file/messageAvailable "$_answerBox"; then
+
+                        _answer=$( ipc/file/receiveMsg "$_answerBox" )
+
+                        local _funcRetVal="$?"
+
+                        if [[ "$_funcRetVal" == "0" ]]; then
+
+                                utils/debugEcho "$_program[$_gsatellite_ipc_file_sigfwd_selfName]: in undelegateAction(): received \"$_answer\""
+                                if [[ ${answer%%;*} == "OK" ]]; then
+					local _returnVal=0
+                                else
+					local _returnVal=1
+                                fi
+                                break
+                        else
+                                utils/debugEcho "$_program[$_gsatellite_ipc_file_sigfwd_selfName]: in undelegateAction(): receiveMsg() didn't return \"0\""
+                        fi
+                else
+                        sleep 0.5
+                fi
+        done
+
+        ipc/file/removeMsgBox "$_answerBox"
+
+        return $_returnVal
+}
+
+
+# Public: Forward signal to local/remote process.
+#
+# $1 (_hostName) - The host name (string) of the machine the signal forwarder is
+#                  running on (=the same machine the target process is running
+#                  on).
+# $2 (_pid)      - The PID (number) of the target process.
+# $3 (_signal)   - The signal (string) to be forwarded to the target process.
+#
+# Returns the return value of the local/remote call to "kill", 1 on a general
+# error.
+ipc/file/sigfwd/forwardSignal()
+{
+	# TODO:
+	# Needs some rework (message receiving)!
+
+        local _hostName="$1"
+        local _pid="$2"
+        local _signal="$3"
+
+        # if target is on the same host, ...
+        if [[ "$_hostName" == $( utils/getHostName ) ]]; then
+
+                # ...then use kill directly
+                kill -"$_signal" "$_pid"
+                return "$?"
+        fi
+
+        # use a temporary inbox during signal forwarding
+        #local _answerBoxName="temp.inbox"
+        local _answerBox=$( ipc/file/createTempMsgBox )
+
+        if [[ "$?" != "0" ]]; then
+
+                utils/debugEcho "$_program[$_gsatellite_ipc_file_sigfwd_selfName]: in forwardSignal(): _answerBox=\"$_answerBox\" creation failed."
+                echo "$_program[$_gsatellite_ipc_file_sigfwd_selfName]: Temporary message box couldn't be created!" 1>&2
+                return 1
+        else
+                utils/debugEcho "$_program[$_gsatellite_ipc_file_sigfwd_selfName]: in forwardSignal(): _answerBox=\"$_answerBox\""
+        fi
+
+        ipc/file/sendMsg "$_MBOXES/$_hostName/$_ipc_file_sigfwdInboxName" "$_signal $_pid;$_answerBox" || \
+        return 1
+
+        local _answer=""
+
+        while [[ 1 ]]; do
+                # touch it first, so changes on other hosts are propagated
+                touch --no-create "$_answerBox"
+                if ipc/file/messageAvailable "$_answerBox"; then
+
+                        _answer=$( ipc/file/receiveMsg "$_answerBox" )
+
+                        local _funcRetVal="$?"
+
+                        if [[ "$_funcRetVal" == "0" ]]; then
+
+                                utils/debugEcho "$_program[$_gsatellite_ipc_file_sigfwd_selfName]: in forwardSignal(): received \"$_answer\""
+                                ipc/file/removeMsgBox "$_answerBox"
+                                break
+                        else
+                                utils/debugEcho "$_program[$_gsatellite_ipc_file_sigfwd_selfName]: in forwardSignal() receiveMsg didn't return \"0\""
+                        fi
+                else
+                        sleep 0.5
+                fi
+        done
+
+
+        # _answer is "return_value_of_kill;inbox_of_sigfwd"
+        local _killRetVal=$( echo "$_answer" | cut -d ';' -f 1 )
+
+        return "$_killRetVal"
+}
+

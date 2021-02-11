@@ -1,0 +1,121 @@
+#!/bin/bash
+# msgproc.bashlib - standard message processing functionality
+
+:<<COPYRIGHT
+
+Copyright (C) 2012 Frank Scheiner
+Copyright (C) 2013, 2014 Frank Scheiner, HLRS, Universitaet Stuttgart
+
+The program is distributed under the terms of the GNU General Public License
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+COPYRIGHT
+
+################################################################################
+# DEFINES
+################################################################################
+
+readonly _gsatellite_ipc_file_msgproc_version="0.2.0"
+readonly _gsatellite_ipc_file_msgproc_selfName="gsatellite/ipc/file/msgproc"
+
+################################################################################
+# EXTERNAL VARIABLES
+################################################################################
+
+# _LIB
+# _program
+
+################################################################################
+# INCLUDES
+################################################################################
+
+. "$_LIB"/gsatellite/ipc/file.bashlib 2>/dev/null
+. "$_LIB"/gsatellite/utils.bashlib 2>/dev/null
+
+################################################################################
+# FUNCTIONS
+################################################################################
+
+# Standard message processing functionality like returning the PID or the host a
+# process runs on or if it is alive or stopping a process on request.
+#
+# $1 (_message) - Message (string) to process (e.g. "ALIVE?;answerBox")
+# $2 (_inbox)   - Inbox directory (string) of process/programm that uses this
+#                 function.
+#
+# Returns 0 on success, 2 on an unknown command.
+ipc/file/msgproc/processMsg() {
+
+        local _message="$1"
+        local _inbox="$2"
+
+        local _command=""
+        local _answerBox=""
+	local _answer=""
+
+        _command=$( echo "$_message" | cut -d ';' -f 1 )
+        _answerBox=$( echo "$_message" | cut -d ';' -f 2 )
+
+        utils/debugEcho "$_program[$_gsatellite_ipc_file_msgproc_selfName]: in ipc/file/msgproc/processMsg(): _message=\"$_message\" _inbox=\"$_inbox\""
+
+        #  standard message processing functionality
+        if [[ "$_command" == "ALIVE?" ]]; then
+
+		_answer="YES;$_inbox"
+                ipc/file/sendMsg "$_answerBox" "$_answer"
+                local _retVal="$?"
+                utils/debugEcho "$_program[$_gsatellite_ipc_file_msgproc_selfName]: in ipc/file/msgproc/processMsg(): after sendMsg \"$_answerBox\" \"$_answer\" which returned \"$_retVal\""
+                return "$_retVal"
+
+        elif [[ "$_command" == "STOP" ]]; then
+
+		_answer="STOPPING;$_inbox"
+                ipc/file/sendMsg "$_answerBox" "$_answer"
+                local _retVal="$?"
+                utils/debugEcho "$_program[$_gsatellite_ipc_file_msgproc_selfName]: in ipc/file/msgproc/processMsg(): after sendMsg \"$_answerBox\" \"$_answer\" which returned \"$_retVal\""
+                exit "$_retVal"
+
+        elif [[ "$_command" == "PID?" ]]; then
+
+		_answer="$$;$_inbox"
+                ipc/file/sendMsg "$_answerBox" "$_answer"
+                local _retVal="$?"
+                utils/debugEcho "$_program[$_gsatellite_ipc_file_msgproc_selfName]: in ipc/file/msgproc/processMsg(): after sendMsg \"$_answerBox\" \"$_answer\" which returned \"$_retVal\""
+                return "$_retVal"
+
+        elif [[ "$_command" == "HOST?" ]]; then
+
+		_answer="$( hostname --fqdn );$_inbox"
+                ipc/file/sendMsg "$_answerBox" "$_answer"
+                local _retVal="$?"
+                utils/debugEcho "$_program[$_gsatellite_ipc_file_msgproc_selfName]: in ipc/file/msgproc/processMsg(): after sendMsg \"$_answerBox\" \"$_answer\" which returned \"$_retVal\""
+                return "$_retVal"
+
+        #  to expand add new commands and handling here
+        #elif [[ "$_command" == "<NEW_COMMAND>" ]]; then
+        #        <DO_SOMETHING>
+        #        ipc/file/sendMsg "$_answerBox" "$( hostname --fqdn );$_inbox"
+        #        return
+        #  the last command should always be the "UNKNOWN COMMAND".
+
+        else
+		_answer="UNKNOWN COMMAND;$_inbox"
+                ipc/file/sendMsg "$_answerBox" "$_answer"
+                local _retVal="$?"
+                utils/debugEcho "$_program[$_gsatellite_ipc_file_msgproc_selfName]: in ipc/file/msgproc/processMsg(): after sendMsg \"$_answerBox\" \"$_answer\" which returned \"$_retVal\""
+                return 2
+        fi
+}
+

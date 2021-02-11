@@ -128,6 +128,10 @@ ipc/file/getLocalMsgBoxByName() {
 
         local _messageBoxName="$1"
 
+	if [[ -z "$_messageBoxName" ]]; then
+		return 1
+	fi
+
         local _hostName=$( hostname --fqdn )
 
         local _messageBoxPath="$_MBOXES/$_hostName"
@@ -235,6 +239,10 @@ ipc/file/removeLocalMsgBoxByName() {
         #  usage:
         #+ ipc/file/removeLocalMsgBoxByName messageBoxName
         local _messageBoxName="$1"
+
+	if [[ -z "$_messageBoxName" ]]; then
+		return 1
+	fi
 
         #  remove message box
         ipc/file/removeMsgBox "$( ipc/file/getLocalMsgBoxByName $_messageBoxName )"

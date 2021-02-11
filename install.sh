@@ -42,6 +42,7 @@ if [[ "$(basename $0)" == "install.sh" ]]; then
 	#  copy scripts and libs
 	cp -rd ./bin "$_prefixDir/$_provider/$_product/"
 	cp -rd ./lib "$_prefixDir/$_provider/$_product/"
+	cp -rd ./libexec "$_prefixDir/$_provider/$_product/"
 
         #  reconfigure paths inside of the scripts and configurations files
         #        + reconfigure path to configuration files
@@ -49,22 +50,24 @@ if [[ "$(basename $0)" == "install.sh" ]]; then
         #        |                                                             + remove (special) comments
         #        |                                                             |
         sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -e 's/#sed#//g' -i "$_prefixDir/$_provider/$_product/bin/gsatctl.bash"
+        sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -e 's/#sed#//g' -i "$_prefixDir/$_provider/$_product/bin/gqstat.bash"
         sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -e 's/#sed#//g' -i "$_prefixDir/$_provider/$_product/bin/gsatlc.bash"
         sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -e 's/#sed#//g' -i "$_prefixDir/$_provider/$_product/bin/sendcmd.bash"
         sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -e 's/#sed#//g' -i "$_prefixDir/$_provider/$_product/bin/sigfwd.bash"
         sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -e 's/#sed#//g' -i "$_prefixDir/$_provider/$_product/bin/sputnik.bash"
         
-	if [[ $_userInstall -eq 1 ]]; then
-        	sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -i "$HOME/.$_product/paths.conf"
-        else
-        	sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -i "$_prefixDir/$_provider/$_product/etc/paths.conf"
-	fi
+	# not needed any longer
+	#if [[ $_userInstall -eq 1 ]]; then
+        #	sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -i "$HOME/.$_product/paths.conf"
+        #else
+        #	sed -e "s|<PATH_TO_GSATELLITE>|$_prefixDir/$_provider/$_product|g" -i "$_prefixDir/$_provider/$_product/etc/paths.conf"
+	#fi
 
 	#  if this is a user install create links in "$HOME/bin"
 	if [[ $_userInstall -eq 1 ]]; then
 		linkPath="$HOME"
 		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gsatctl" &>/dev/null
-		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gqstat" &>/dev/null
+		ln -s "$_prefixDir/$_provider/$_product/bin/gqstat.bash" "$linkPath/bin/gqstat" &>/dev/null
 		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gqsub" &>/dev/null
 		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gqhold" &>/dev/null
 		ln -s "$_prefixDir/$_provider/$_product/bin/gsatctl.bash" "$linkPath/bin/gqrls" &>/dev/null
