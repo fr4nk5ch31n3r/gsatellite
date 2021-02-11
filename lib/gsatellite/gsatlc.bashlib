@@ -5,7 +5,7 @@
 :<<COPYRIGHT
 
 Copyright (C) 2012 Frank Scheiner
-Copyright (C) 2013, 2014, 2016 Frank Scheiner, HLRS, Universitaet Stuttgart
+Copyright (C) 2013, 2014, 2016, 2021 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -113,6 +113,34 @@ gsatlc/processMsg()
 
                 return
 
+	#  event: qsig
+	elif [[ "$_command" =~ ^QSIG.* ]]; then
+		#  _command is "QSIG <SIGNAL> <JOB_ID>"
+		local _signal=$( echo "$_command" | cut -d ' ' -f 2 )
+		local _jobId=$( echo "$_command" | cut -d ' ' -f 3 )
+
+		if gschedule/isRunningJob "$_jobId"; then
+			local _runningJob=1
+		else
+			local _runningJob=0
+		fi
+
+		gsatlc/qsig "$_signal" "$_jobId"
+		local _funcRetVal="$?"
+
+		if [[ "$_funcRetVal" == "0" ]]; then
+			ipc/file/sendMsg "$_answerBox" "OK;$_inbox"
+		if [[ $_runningJob -eq 1 ]]; then
+			gsatlc/schedule
+		fi
+		elif [[ "$_funcRetVal" == "$_gschedule_errorInvalidJobId" ]]; then
+			ipc/file/sendMsg "$_answerBox" "qsig failed: invalid job id;$_inbox"
+		else
+			ipc/file/sendMsg "$_answerBox" "qsig failed;$_inbox"
+		fi
+
+		return
+
         #  event: qrls
         elif [[ "$_command" =~ ^QRLS.* ]]; then
                 #  _command is "QRLS <JOB_ID>"
@@ -207,12 +235,11 @@ gsatlc/processMsg()
                         else
                                 return 1
                         fi
-                fi                
+                fi
 
         #  unknown event or command
         else
                 return 2
-
         fi
 }
 
@@ -252,7 +279,24 @@ gsatlc/qhold()
 }
 
 
-# Instruct scheduler to relase a hold that was put on a job.
+# Instruct the scheduler to send a signal to a job.
+#
+# $2 (_signal) - Signal (string) to send.
+# $1 (_jobId)  - Id (number) of the job.
+#
+# See gschedule/signalJob() for possible return codes.
+gsatlc/qsig()
+{
+	local _signal="$1"
+        local _jobId="$2"
+
+        gschedule/signalJob "$_signal" "$_jobId"
+
+        return
+}
+
+
+# Instruct the scheduler to relase a hold that was put on a job.
 #
 # $1 (_jobId) - Id (number) of the job.
 #
@@ -270,7 +314,7 @@ gsatlc/qrls()
 }
 
 
-# Instruct scheduler to remove a job from gsatellite.
+# Instruct the scheduler to remove a job from gsatellite.
 #
 # $1 (_jobId) - Id (number) of the job.
 #
@@ -285,7 +329,7 @@ gsatlc/qdel()
 }
 
 
-# Call scheduler to start the next job that is in state queued.
+# Instruct the scheduler to start the next job that is in state queued.
 #
 # Returns 0 on success, 1 otherwise.
 gsatlc/schedule()

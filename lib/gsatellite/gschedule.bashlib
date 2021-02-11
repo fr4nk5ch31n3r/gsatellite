@@ -4,7 +4,7 @@
 :<<COPYRIGHT
 
 Copyright (C) 2012, 2013 Frank Scheiner
-Copyright (C) 2014-2016 Frank Scheiner, HLRS, Universitaet Stuttgart
+Copyright (C) 2014-2016, 2021 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -38,31 +38,36 @@ readonly __GLOBAL__maxJobRestarts=3
 readonly _gschedule_jobStateFileName="job.state"
 readonly _gschedule_jobEnvFileName="job.env"
 
-readonly _gsatBaseDir=$HOME/.gsatellite
-readonly _gscheduleBaseDir="$_gsatBaseDir/gschedule"
+readonly _gsatBaseDir="${HOME}/.gsatellite"
+readonly _gscheduleBaseDir="${_gsatBaseDir}/gschedule"
 readonly _gscheduleJobDirs="jobs ready running finished failed"
-readonly _gscheduleJobIdSource="$_gscheduleBaseDir/nextJobId"
+readonly _gscheduleJobIdSource="${_gscheduleBaseDir}/nextJobId"
 
-readonly _gscheduleRunningDir="$_gscheduleBaseDir/running"
-readonly _gscheduleFinishedDir="$_gscheduleBaseDir/finished"
-readonly _gscheduleFailedDir="$_gscheduleBaseDir/failed"
-readonly _gscheduleHeldDir="$_gscheduleBaseDir/held"
-readonly _gscheduleQueuedDir="$_gscheduleBaseDir/queued"
-readonly _gscheduleJobsDir="$_gscheduleBaseDir/jobs"
+readonly _gscheduleRunningDir="${_gscheduleBaseDir}/running"
+readonly _gscheduleFinishedDir="${_gscheduleBaseDir}/finished"
+readonly _gscheduleFailedDir="${_gscheduleBaseDir}/failed"
+readonly _gscheduleHeldDir="${_gscheduleBaseDir}/held"
+readonly _gscheduleQueuedDir="${_gscheduleBaseDir}/queued"
+readonly _gscheduleJobsDir="${_gscheduleBaseDir}/jobs"
 
 # Defined exit codes
 #
 # NOTICE:
-# We try to restrict the exit codes to codes 0, 1 and 64 - 113, according to
+# We try to restrict the exit codes to codes 0, 1 and 79 - 113, according to
 # [1].
 #
 # [1] <http://tldp.org/LDP/abs/html/exitcodes.html>
+readonly _err=1
+readonly _errCannotCreateBaseDir=79
+readonly _errCannotCreateJobDirs=80
+readonly _gschedule_errorRunningJob=81
+readonly _gschedule_errorInvalidJobId=82
 
-readonly _err="1"
-readonly _errCannotCreateBaseDir="64"
-readonly _errCannotCreateJobDirs="65"
-readonly _gschedule_errorRunningJob="66"
-readonly _gschedule_errorInvalidJobId="67"
+# see `/usr/include/sysexits.h`
+readonly _exit_ok=0
+readonly _exit_usage=64
+readonly _exit_software=70
+
 
 ################################################################################
 # EXTERNAL VARIABLES
@@ -82,14 +87,14 @@ readonly _gschedule_errorInvalidJobId="67"
 #. "$_LIB"/jobTypes.bashlib
 
 _neededLibraries=( "gsatellite/utils.bashlib"
-		   "gsatellite/ipc.bashlib"
-		   "gsatellite/jobTypes.bashlib" )
+		    "gsatellite/ipc.bashlib"
+		    "gsatellite/jobTypes.bashlib" )
 
 for _library in ${_neededLibraries[@]}; do
 
 	if ! . "$_LIB/$_library"; then
 		echo "$_program[$_selfName]: Library \"$_LIB/$_library\" couldn't be read or is corrupted." 1>&2
-		exit 70
+		exit $_exit_software
 	fi
 done
 
@@ -105,11 +110,11 @@ if [[ ! -e "$_gscheduleBaseDir" ]]; then
     _oldPwd="$PWD"
     cd "$_gscheduleBaseDir"
     mkdir "$_gscheduleRunningDir" \
-	  "$_gscheduleFinishedDir" \
-	  "$_gscheduleFailedDir" \
+          "$_gscheduleFinishedDir" \
+          "$_gscheduleFailedDir" \
           "$_gscheduleHeldDir" \
-	  "$_gscheduleQueuedDir" \
-	  "$_gscheduleJobsDir" &>/dev/null || \
+          "$_gscheduleQueuedDir" \
+          "$_gscheduleJobsDir" &>/dev/null || \
     utils/exit "$_program[$_selfName]: Cannot create job directories! Exiting." "$_errCannotCreateJobDirs"
 
     #  initialize job id source
@@ -479,6 +484,99 @@ gschedule/holdJob()
         echo "held" > "$_gscheduleJobsDir/$_jobId.d/job.state"
 
         #ipc/unlock "$_jobDir"
+
+        return
+}
+
+
+# Send given signal to the job with the given job id.
+#
+# $1 (_signal) - The signal (string) to send.
+# $2 (_jobId)  - The job id (number) given to the job.
+#
+# Returns 0 on success, 67 if given job id is invalid, 1 otherwise.
+gschedule/signalJob()
+{
+        local _signal="$1"
+        local _jobId="$2"
+
+        if ! gschedule/isValidJobId "$_jobId"; then
+                return "$_gschedule_errorInvalidJobId"
+        fi
+
+        # get job dir
+        # TODO:
+        # and check for existence!
+        local _jobDir="$_gscheduleBaseDir/jobs/$_jobId.d"
+
+        # try to lock job dir until locked
+        #while ! ipc/lock "$_jobDir"; do
+        #        sleep 1
+        #done
+
+        # if job is running, send signal, ...
+        if gschedule/isRunningJob "$_jobId"; then
+		utils/debugEcho "$_program[$_selfName]: in signalJob(): is running job!"
+                # create temporary message box
+                local _tempMsgBox=$( ipc/file/createTempMsgBox )
+
+                utils/debugEcho "$_program[$_selfName]: in signalJob(): _tempMsgBox=\"$_tempMsgBox\""
+
+                # get corresponding satellite (sputnik)
+                local _sputnikPid=$( cat "$_jobDir/sputnik.pid" )
+                local _sputnikHostname=$( cat "$_jobDir/job.execHost" )
+                local _sputnikMessageBox="$_MBOXES/$_sputnikHostname/$_sputnikPid.inbox"
+
+                local _message="SIGNAL $_signal;$_tempMsgBox"
+
+                # send "SIG" message to sputnik
+                if ! ipc/file/sendMsg "$_sputnikMessageBox" "$_message"; then
+                        utils/debugEcho "$_program[$_selfName]: in signalJob(): ipc/file/sendMsg() failed!"
+                        return 1
+                fi
+
+                utils/debugEcho "$_program[$_selfName]: in signalJob(): after sendMsg()!"
+
+                # wake up sputnik
+                local _signal="SIGCONT"
+
+                # wake sputnik with signal forwarding
+                ipc/file/sigfwd/forwardSignal "$_sputnikHostname" "$_sputnikPid" "$_signal" || \
+                (utils/debugEcho "$_program[$_selfName]: in signalJob(): ipc/file/sigfwd/forwardSignal() failed!" && return 1)
+
+                utils/debugEcho "$_program[$_selfName]: in signalJob(): after forwardSignal()!"
+
+                # receive acknowledgement
+                local _receivedMessage=""
+
+                while [[ 1 ]]; do
+                        # touch it first, so changes on other hosts are propagated
+                        touch --no-create "$_tempMsgBox"
+                        if ipc/file/messageAvailable "$_tempMsgBox"; then
+                                _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
+
+                                if [[ $? -eq 0 ]]; then
+                                        utils/debugEcho "$_program[$_selfName]: in signalJob(): _receivedMessage=\"$_receivedMessage\""
+                                        break
+                                fi
+                        else
+                                sleep 0.5
+                        fi
+                done
+
+                local _receivedCommand=${_receivedMessage%%;*}
+
+                if [[ "$_receivedCommand" == "OK" ]]; then
+                        ipc/file/removeMsgBox "$_tempMsgBox"
+
+                        return 0
+                else
+                        ipc/file/removeMsgBox "$_tempMsgBox"
+
+                        return 1
+                fi
+        fi
+        # ...if not, do nothing.
 
         return
 }

@@ -5,7 +5,7 @@
 :<<COPYRIGHT
 
 Copyright (C) 2012 Frank Scheiner
-Copyright (C) 2013-2015 Frank Scheiner, HLRS, Universitaet Stuttgart
+Copyright (C) 2013-2015, 2021 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -28,8 +28,13 @@ COPYRIGHT
 # DEFINES
 ################################################################################
 
-readonly _gsatellite_interface_version="0.3.0"
+readonly _gsatellite_interface_version="0.4.0"
 readonly _selfName="gsatellite/interface"
+
+# see `/usr/include/sysexits.h`
+readonly _exit_ok=0
+readonly _exit_usage=64
+readonly _exit_software=70
 
 ################################################################################
 # EXTERNAL VARIABLES
@@ -43,14 +48,14 @@ readonly _selfName="gsatellite/interface"
 ################################################################################
 
 _neededLibraries=( "gsatellite/ipc/file/sigfwd.bashlib"
-		   "gsatellite/utils.bashlib"
-		   "gsatellite/gsatlc.bashlib" )
+		    "gsatellite/utils.bashlib"
+		    "gsatellite/gsatlc.bashlib" )
 
 for _library in ${_neededLibraries[@]}; do
 
 	if ! . "$_LIB/$_library"; then
 		echo "$_program[$_selfName]: Library \"$_LIB/$_library\" couldn't be read or is corrupted." 1>&2
-		exit 70
+		exit $_exit_software
 	fi
 done
 
@@ -172,7 +177,7 @@ gsatellite/interface/qsub()
                         _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
 
                         if [[ $? -eq 0 ]]; then
-                                #echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
+                                utils/debugEcho "_receivedMessage=\"$_receivedMessage\""
                                 break
                         fi
                 else
@@ -182,8 +187,8 @@ gsatellite/interface/qsub()
 
         local _receivedCommand=${_receivedMessage%%;*}
 
-        #echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
-        #echo "($$) DEBUG: _receivedCommand=\"$_receivedCommand\""
+        utils/debugEcho "_receivedMessage=\"$_receivedMessage\""
+        utils/debugEcho "_receivedCommand=\"$_receivedCommand\""
 
         if [[ "$_receivedCommand" == "qsub failed" ]]; then
                 echo "$_program[$_selfName]: qsub failed!" 1>&2
@@ -243,7 +248,7 @@ gsatellite/interface/qhold()
                         _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
 
                         if [[ $? -eq 0 ]]; then
-                                #echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
+                                utils/debugEcho "_receivedMessage=\"$_receivedMessage\""
                                 break
                         fi
                 else
@@ -253,8 +258,8 @@ gsatellite/interface/qhold()
 
         local _receivedCommand=${_receivedMessage%%;*}
 
-        #echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
-        #echo "($$) DEBUG: _receivedCommand=\"$_receivedCommand\""
+        utils/debugEcho "_receivedMessage=\"$_receivedMessage\""
+        utils/debugEcho "_receivedCommand=\"$_receivedCommand\""
 
         if [[ "$_receivedCommand" != "OK" ]]; then
                 echo "$_program[$_selfName]: qhold failed!" 1>&2
@@ -265,6 +270,74 @@ gsatellite/interface/qhold()
                 return 0
         fi
 
+}
+
+
+# Public: Send a signal to a gsatellite job.
+#
+# $1 (_signal) - Signal (string) to send to the gsatellite job.
+# $2 (_jobId)  - Id (number) of the job.
+#
+# Returns 0 on success, 1 otherwise.
+gsatellite/interface/qsig()
+{
+	local _signal="$1"
+	local _jobId="$2"
+
+	# TODO:
+	# Only hold jobs, that are in state "queued" or "running". And also
+	# introduce second path that avoids message communication.
+
+	local _tempMsgBox=$( ipc/file/createTempMsgBox )
+
+	# send qhold command to gsatlc
+	local _message="QSIG $_signal $_jobId;$_tempMsgBox"
+
+	local _gsatlcHostName=$( cat "$_gsatBaseDir/gsatlcHostName" )
+	local _gsatlcPid=$( cat "$_gsatBaseDir/gsatlcPid" )
+	local _messageBox="$_MBOXES/$_gsatlcHostName/$_gsatlcPid.inbox"
+
+	if ! ipc/file/sendMsg "$_messageBox" "$_message"; then
+		echo "$_program[$_selfName]: ipc/file/sendMsg() failed!" 1>&2
+		return 1
+	fi
+
+	local _signal="SIGCONT"
+
+	# wake gsatlc with signal forwarding
+	ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal" || \
+	(echo "$_program[$_selfName]: ipc/file/sigfwd/forwardSignal() failed!" 1>&2 && return 1)
+
+	local _receivedMessage=""
+
+	while [[ 1 ]]; do
+		# touch it first, so changes on other hosts are propagated
+		touch --no-create "$_tempMsgBox"
+		if ipc/file/messageAvailable "$_tempMsgBox"; then
+			_receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
+
+			if [[ $? -eq 0 ]]; then
+				utils/debugEcho "_receivedMessage=\"$_receivedMessage\""
+				break
+			fi
+		else
+			sleep 0.5
+		fi
+	done
+
+	local _receivedCommand=${_receivedMessage%%;*}
+
+	utils/debugEcho "_receivedMessage=\"$_receivedMessage\""
+	utils/debugEcho "_receivedCommand=\"$_receivedCommand\""
+
+	if [[ "$_receivedCommand" != "OK" ]]; then
+		echo "$_program[$_selfName]: qsig failed!" 1>&2
+		ipc/file/removeMsgBox "$_tempMsgBox"
+		return 1
+	else
+		ipc/file/removeMsgBox "$_tempMsgBox"
+		return 0
+	fi
 }
 
 
@@ -317,7 +390,7 @@ gsatellite/interface/qrls()
                                 _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
 
                                 if [[ $? -eq 0 ]]; then
-                                        #echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
+                                        utils/debugEcho "_receivedMessage=\"$_receivedMessage\""
                                         break
                                 fi
                         else
@@ -327,8 +400,8 @@ gsatellite/interface/qrls()
 
                 local _receivedCommand=${_receivedMessage%%;*}
 
-                #echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
-                #echo "($$) DEBUG: _receivedCommand=\"$_receivedCommand\""
+                utils/debugEcho "_receivedMessage=\"$_receivedMessage\""
+                utils/debugEcho "_receivedCommand=\"$_receivedCommand\""
 
                 if [[ "$_receivedCommand" != "OK" ]]; then
                         echo "$_program[$_selfName]: qrls failed!" 1>&2
@@ -399,7 +472,7 @@ gsatellite/interface/qdel()
                                 _receivedMessage=$( ipc/file/receiveMsg "$_tempMsgBox" )
 
                                 if [[ $? -eq 0 ]]; then
-                                        #echo "($$) DEBUG: _receivedMessage=\"$_receivedMessage\""
+                                        utils/debugEcho "_receivedMessage=\"$_receivedMessage\""
                                         break
                                 fi
                         else
@@ -440,7 +513,7 @@ gsatellite/interface/listJobsInState()
 
         for _jobDir in $( ls -1 "$_gscheduleBaseDir/$_jobState" ); do
 
-                #echo "($$) DEBUG: _jobDir=\"$_jobDir\""
+                utils/debugEcho "_jobDir=\"$_jobDir\""
 
                 local _jobId=$( basename "$_gscheduleBaseDir/$_jobState/$_jobDir" )
                 _jobId=${_jobId%.d}
@@ -487,7 +560,7 @@ gsatellite/interface/listJobs()
 	#                 returns file names without path prefix!
         for _jobDir in $( ls -1 "$_jobsBaseDir" ); do
 
-                #echo "($$) DEBUG: _jobDir=\"$_jobDir\""
+                utils/debugEcho "_jobDir=\"$_jobDir\""
 
 		local _currentJobType=$( cat "$_jobsBaseDir/$_jobDir/job.type" 2>/dev/null )
 		if [[ "$_currentJobType" != "$_jobType" && \
@@ -523,7 +596,7 @@ gsatellite/interface/listAllJobs()
 
         for _jobDir in $( ls -1 "$_gscheduleBaseDir/jobs" ); do
 
-                #echo "($$) DEBUG: _jobDir=\"$_jobDir\""
+                utils/debugEcho "jobDir=\"$_jobDir\""
 
                 local _jobId=$( basename "$_gscheduleBaseDir/jobs/$_jobDir" )
                 _jobId=${_jobId%.d}

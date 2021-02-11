@@ -5,7 +5,7 @@
 :<<COPYRIGHT
 
 Copyright (C) 2011, 2012, 2013 Frank Scheiner
-Copyright (C) 2013 Frank Scheiner, HLRS, Universitaet Stuttgart
+Copyright (C) 2013, 2015, 2016, 2021 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -30,11 +30,15 @@ _DEBUG="0"
 
 _program=$( basename "$0" )
 
-_sputnikVersion="0.3.0"
+_sputnikVersion="0.4.0"
 
-readonly _exit_usage=64
+# see `/usr/include/sysexits.h`
 readonly _exit_ok=0
+readonly _exit_usage=64
 readonly _exit_software=70
+
+readonly _true=1
+readonly _false=0
 
 ################################################################################
 
@@ -89,9 +93,9 @@ _gscheduleBaseDir="$_gsatBaseDir/gschedule"
 
 #  include needed libaries
 _neededLibraries=( "ipc/file/sigfwd.bashlib"
-		   "ipc/file/msgproc.bashlib"
-		   "utils.bashlib"
-		   "gschedule.bashlib" )
+		    "ipc/file/msgproc.bashlib"
+		    "utils.bashlib"
+		    "gschedule.bashlib" )
 
 for _library in "${_neededLibraries[@]}"; do
 
@@ -107,6 +111,32 @@ done
 #  ignore SIGINT and SIGTERM
 trap 'echo "($$) [sputnik] DEBUG: SIGINT received." >> "$__GLOBAL__sputnikLogFile"' SIGINT
 trap 'echo "($$) [sputnik] DEBUG: SIGTERM received." >> "$__GLOBAL__sputnikLogFile"' SIGTERM
+
+sputnik/signalJob()
+{
+	local _job="$1"
+	local _signal="$2"
+
+	echo "($$) [sputnik] DEBUG: /bin/kill -"$_signal" -"$_jobChildPid"" >> "$__GLOBAL__sputnikLogFile"
+
+	#  NOTICE: There's a "-" in front of the PID. This results in signalling
+	#+ the whole process group of sputnik. All sputnik processes should
+	#+ ignore SIGINT and SIGTERM, but the children of the job child should react on
+	#+ this.
+        /bin/kill -"$_signal" -"$_jobChildPid" 1>> "$__GLOBAL__sputnikLogFile" 2>&1
+
+	local _returnVal=$?
+
+	echo "($$) [sputnik] DEBUG: _returnVal=\"$_returnVal\"" >> "$__GLOBAL__sputnikLogFile"
+
+        if [[ "$_returnVal" == "0" ]]; then
+
+                return 0
+        else
+                return 1
+        fi
+}
+
 
 sputnik/holdJob() {
         #  Put a hold on a job
@@ -143,116 +173,8 @@ sputnik/holdJob() {
 	local _returnVal=$?
 	
 	echo "($$) [sputnik] DEBUG: _returnVal=\"$_returnVal\"" >> "$__GLOBAL__sputnikLogFile"
-	
-	# Remove after testing
-	#return 0
 
         if [[ "$_returnVal" == "0" ]]; then
-                return 0
-        else
-                return 1
-        fi
-        
-}
-
-sputnik/runJob() {
-        #  run the gsatellite job and notify parent when it terminates.
-        #
-        #  usage:
-        #+ sputnik/runJob job parentPid parentInbox
-
-        local _job="$1"
-        local _parentPid="$2"
-        local _parentInbox="$3"
-        local _message=""
-
-	########################################################################
-	# notify parent of own PID (as runJob is started with `setsid` the
-	# parent looses track of the child)
-	local _self="$$"
-	
-	_message="JOB_CHILD_PID $_self;"
-
-	ipc/file/sendMsg "$_parentInbox" "$_message"
-
-        #  wakeup parent
-        /bin/kill -SIGCONT $_parentPid &>/dev/null
-	########################################################################
-
-        local _jobTmpDir=$( dirname "$_job" )
-        
-        #  determine values for add. environment
-	local _jobId="$__GLOBAL__jobId"
-	local _jobDir=$( gschedule/getJobDir "$_jobId" )
-	local _jobName=$( basename "$_job" )
-	local _jobWorkDir="$_jobDir/jobtmp"
-	local _home="$HOME"
-	local _user="$USER"
-	local _execHost=$( utils/getHostName )
-	local _path="$PATH"
-
-        #  create additional environment
-	local _environmentFile="${_jobDir}/${_gschedule_jobEnvFileName}"
-
-	cat > "$_environmentFile" <<-EOF
-	export GSAT_JOBNAME="$_jobName"
-	export GSAT_O_WORKDIR="$_jobWorkDir"
-	export GSAT_O_HOME="$_home"
-	export GSAT_O_LOGNAME="$_user"
-	export GSAT_O_JOBID="$_jobId"
-	export GSAT_O_HOST="$_execHost"
-	export GSAT_O_PATH="$_path"
-	EOF
-
-	. "$_environmentFile"
-
-	chmod +x "$_job"
-
-        #  run job in the background to get its PID. We need its PID to be able
-        #+ to interact with it with signals later.
-        cd "$_jobTmpDir" && \
-	$_job 1>"$_jobDir/job.stdout" 2>"$_jobDir/job.stderr" &
-
-        local _jobPid="$!"
-
-	#  record job start timestamp
-	date +%s >> "$_jobDir/job.start"
-
-        #  save job's PID
-        echo "$_jobPid" > "$__GLOBAL__jobPidFile"
-
-	_message="STARTED;"
-
-	ipc/file/sendMsg "$_parentInbox" "$_message"
-
-        #  wakeup parent
-        /bin/kill -SIGCONT $_parentPid &>/dev/null
-
-	# return false if `kill` failed?
-        #if [[ "$?" != "0" ]]; then
-	#	return 1
-        #fi
-
-        #  wait for the job to terminate
-        wait "$_jobPid"
-
-        local _jobExitValue="$?"
-
-	#  record job stop timestamp
-	date +%s >> "$_jobDir/job.stop"
-
-	#  save job's exit value
-	echo "$_jobExitValue" > "$_jobDir/job.exit"
-
-        #  no answer from the parent needed, hence no inbox provided
-        _message="TERMINATED $_jobExitValue;"
-
-        ipc/file/sendMsg "$_parentInbox" "$_message"
-
-        #  wakeup parent
-        /bin/kill -SIGCONT $_parentPid &>/dev/null
-
-        if [[ "$?" == "0" ]]; then
                 return 0
         else
                 return 1
@@ -311,7 +233,7 @@ processMsg() {
 
         elif [[ "$_command" =~ ^TERMINATED.* ]]; then
         	#  only do something if job is not held
-                if [[ $_jobHeld -eq 0 ]]; then
+                if [[ $_jobHeld -eq $_false ]]; then
                 
                 	#  command is "TERMINATED <EXIT_VALUE>"
                 	local _jobExitValue=$( echo "$_command" | cut -d ' ' -f 2 )
@@ -367,6 +289,32 @@ processMsg() {
                         exit 1
                 fi
 
+	elif [[ "$_command" =~ ^SIGNAL.*$ ]]; then
+                #  command is "SIGNAL <SIGNAL>"
+		local _signal=$( echo "$_command" | cut -d ' ' -f 2 )
+
+                #  Send signal to job
+                sputnik/signalJob "$_job" "$_signal"
+
+                if [[ "$?" == "0" ]]; then
+                        local _gsatlcMessage="OK;$_inbox"
+                else
+                        local _gsatlcMessage="SIGNAL FAILED;$_inbox"
+                fi
+
+                ipc/file/sendMsg "$_answerBox" "$_gsatlcMessage"
+
+                #  No wakeup needed, gsatlc is actively waiting for this answer
+                #local _signal="SIGCONT"
+
+                #  wake gsatlc with signal forwarding
+                #ipc/file/sigfwd/forwardSignal "$_gsatlcHostName" "$_gsatlcPid" "$_signal"
+
+                if [[ "$?" == "0" ]]; then
+                        exit 0
+                else
+                        exit 1
+                fi
         fi
 
         #  standard functionality for message processing

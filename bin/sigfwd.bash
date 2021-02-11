@@ -8,7 +8,7 @@
 :<<COPYRIGHT
 
 Copyright (C) 2012 Frank Scheiner
-Copyright (C) 2013 Frank Scheiner, HLRS, Universitaet Stuttgart
+Copyright (C) 2013, 2021 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -36,7 +36,12 @@ readonly _false=0
 
 readonly __GLOBAL__programName=$( basename "$0" )
 
-readonly __GLOBAL__version="0.3.0"
+readonly __GLOBAL__version="0.3.1"
+
+# see `/usr/include/sysexits.h`
+readonly _exit_ok=0
+readonly _exit_usage=64
+readonly _exit_software=70
 
 # time to sleep between each check for new messages
 readonly __GLOBAL__sleepInterval="0.5"

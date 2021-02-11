@@ -5,7 +5,7 @@
 :<<COPYRIGHT
 
 Copyright (C) 2011, 2012, 2013 Frank Scheiner
-Copyright (C) 2013 Frank Scheiner, HLRS, Universitaet Stuttgart
+Copyright (C) 2013, 2021 Frank Scheiner, HLRS, Universitaet Stuttgart
 
 The program is distributed under the terms of the GNU General Public License
 
@@ -127,8 +127,8 @@ runJob() {
         local _message=""
 
 	########################################################################
-	# notify parent of own PID (as runJob is started with `setsid` the
-	# parent looses track of the child)
+	# notify parent of own PID (as sputnikRunJob is started with `setsid`
+	# the parent looses track of the child)
 	local _self="$$"
 	
 	_message="JOB_CHILD_PID $_self;"
@@ -176,13 +176,13 @@ runJob() {
 	local _environmentFile="${_jobDir}/${_gschedule_jobEnvFileName}"
 
 	cat > "$_environmentFile" <<-EOF
-	export GSAT_JOBNAME="$_jobName"
-	export GSAT_O_WORKDIR="$_jobWorkDir"
-	export GSAT_O_HOME="$_home"
-	export GSAT_O_LOGNAME="$_user"
-	export GSAT_O_JOBID="$_jobId"
-	export GSAT_O_HOST="$_execHost"
-	export GSAT_O_PATH="$_path"
+	export GSAT_JOBNAME="${_jobName}"
+	export GSAT_O_WORKDIR="${_jobWorkDir}"
+	export GSAT_O_HOME="${_home}"
+	export GSAT_O_LOGNAME="${_user}"
+	export GSAT_O_JOBID="${_jobId}"
+	export GSAT_O_HOST="${_execHost}"
+	export GSAT_O_PATH="${_path}"
 	EOF
 
 	# Add per job type environment
